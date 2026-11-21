@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+# A stand-in for `scry lsp` in tests, started as `fake-lsp lsp` (the argument is ignored).
+# It announces what scry announces (open/close/save sync without text, code actions, the
+# three scry.* commands) and records every message it gets to $FAKE_LSP_LOG (one JSON per
+# line). On textDocument/didSave it does what the real server does: a
+# window/workDoneProgress/create request (token sorcerer-1) it waits to be answered, then
+# $/progress begin (title scry, "reviewing 2 units"), an optional report (the text in
+# $FAKE_LSP_REPLIES/report.json as {"report": "..."}), publishDiagnostics for the file with
+# the findings in $FAKE_LSP_REPLIES/diagnostics.json, then $/progress end (no message).
+# diagnostics.json is a list of {"line": <0-based>, "code": "bug", "statement": "...",
+# "rule": "r1" (optional), "stale": true (optional), "id": "f1", "evidence": "..." (optional)};
+# they are published shaped as scry's: the whole line, severity 1 for bug else 2, source scry,
+# code the issue type (type-stale when stale), data the finding id, relatedInformation only
+# when the client's initialize advertised it.
+import json
+import os
+import sys
+from urllib.parse import unquote, urlparse
+
+log = open(os.environ.get("FAKE_LSP_LOG", "/dev/null"), "a")
+related_ok = False
+
+
+def read():
+    length = None
+    while True:
+        line = sys.stdin.buffer.readline()
+        if not line:
+            sys.exit(0)
+        line = line.decode().strip()
+        if not line:
+            break
+        if line.lower().startswith("content-length:"):
+            length = int(line.split(":")[1])
+    msg = json.loads(sys.stdin.buffer.read(length))
+    log.write(json.dumps(msg) + "\n")
+    log.flush()
+    return msg
+
+
+def send(msg):
+    body = json.dumps(msg).encode()
+    sys.stdout.buffer.write(b"Content-Length: %d\r\n\r\n" % len(body) + body)
+    sys.stdout.buffer.flush()
+
+
+def canned(name):
+    path = os.path.join(os.environ.get("FAKE_LSP_REPLIES", "/nonexistent"), name)
+    return json.load(open(path)) if os.path.exists(path) else None
+
+
+def utf16_len(s):
+    return len(s.encode("utf-16-le")) // 2
+
+
+def diagnostics_for(uri):
+    path = unquote(urlparse(uri).path)
+    try:
+        lines = open(path, encoding="utf-8").read().split("\n")
+    except OSError:
+        lines = []
+    out = []
+    for spec in canned("diagnostics.json") or []:
+        line = spec["line"]
+        text = lines[line] if line < len(lines) else ""
+        message = [spec["statement"]]
+        if spec.get("rule"):
+            message.append("rule: " + spec["rule"])
+        if spec.get("stale"):
+            message.append("(the code changed since this review)")
+        d = {
+            "range": {"start": {"line": line, "character": 0}, "end": {"line": line, "character": utf16_len(text)}},
+            "severity": 1 if spec["code"] == "bug" else 2,
+            "source": "scry",
+            "code": spec["code"] + ("-stale" if spec.get("stale") else ""),
+            "message": "\n".join(message),
+            "data": spec["id"],
+        }
+        if related_ok and spec.get("evidence"):
+            d["relatedInformation"] = [{"location": {"uri": uri, "range": d["range"]}, "message": spec["evidence"]}]
+        out.append(d)
+    return out
+
+
+def progress(value):
+    send({"jsonrpc": "2.0", "method": "$/progress", "params": {"token": "sorcerer-1", "value": value}})
+
+
+def on_save(uri):
+    send({"jsonrpc": "2.0", "id": "srv-1", "method": "window/workDoneProgress/create", "params": {"token": "sorcerer-1"}})
+    while True:  # hold the begin until the editor answers
+        reply = read()
+        if reply.get("id") == "srv-1" and "method" not in reply:
+            break
+    progress({"kind": "begin", "title": "scry", "message": "reviewing 2 units"})
+    report = canned("report.json")
+    if report:
+        progress({"kind": "report", "message": report["report"]})
+    send({"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics", "params": {"uri": uri, "diagnostics": diagnostics_for(uri)}})
+    progress({"kind": "end"})
+
+
+while True:
+    msg = read()
+    method = msg.get("method")
+    if method is None:
+        continue  # the client's answer to a server request
+    if method == "initialize":
+        caps = (msg["params"].get("capabilities") or {}).get("textDocument", {}).get("publishDiagnostics", {})
+        related_ok = bool(caps.get("relatedInformation"))
+        send({"jsonrpc": "2.0", "id": msg["id"], "result": {"capabilities": {
+            "textDocumentSync": {"openClose": True, "save": {"includeText": False}, "change": 0},
+            "codeActionProvider": True,
+            "executeCommandProvider": {"commands": ["scry.why", "scry.showCode", "scry.dismiss"]},
+        }, "serverInfo": {"name": "scry"}}})
+    elif method == "shutdown":
+        send({"jsonrpc": "2.0", "id": msg["id"], "result": None})
+    elif method == "exit":
+        sys.exit(0)
+    elif method == "textDocument/didSave":
+        on_save(msg["params"]["textDocument"]["uri"])
+    elif "id" in msg:
+        send({"jsonrpc": "2.0", "id": msg["id"], "result": canned(method.replace("/", "_") + ".json")})
