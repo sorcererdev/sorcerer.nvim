@@ -11,14 +11,18 @@
 # "rule": "r1" (optional), "stale": true (optional), "id": "f1", "evidence": "..." (optional)};
 # they are published shaped as scry's: the whole line, severity 1 for bug else 2, source scry,
 # code the issue type (type-stale when stale), data the finding id, relatedInformation only
-# when the client's initialize advertised it.
+# when the client's initialize advertised it. When the client's initializationOptions say
+# drawsWorking, a save also sends sorcerer/working with the file's first line before the
+# progress begins, and an empty list 1.5 s after it, before the progress ends.
 import json
 import os
 import sys
+import time
 from urllib.parse import unquote, urlparse
 
 log = open(os.environ.get("FAKE_LSP_LOG", "/dev/null"), "a")
 related_ok = False
+draws_working = False
 
 
 def read():
@@ -86,17 +90,26 @@ def progress(value):
     send({"jsonrpc": "2.0", "method": "$/progress", "params": {"token": "sorcerer-1", "value": value}})
 
 
+def working(units):
+    send({"jsonrpc": "2.0", "method": "sorcerer/working", "params": {"units": units}})
+
+
 def on_save(uri):
     send({"jsonrpc": "2.0", "id": "srv-1", "method": "window/workDoneProgress/create", "params": {"token": "sorcerer-1"}})
     while True:  # hold the begin until the editor answers
         reply = read()
         if reply.get("id") == "srv-1" and "method" not in reply:
             break
+    if draws_working:
+        working([{"uri": uri, "line": 0, "text": "\u27f3 scry: reviewing\u2026"}])
     progress({"kind": "begin", "title": "scry", "message": "reviewing 2 units"})
     report = canned("report.json")
     if report:
         progress({"kind": "report", "message": report["report"]})
     send({"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics", "params": {"uri": uri, "diagnostics": diagnostics_for(uri)}})
+    if draws_working:
+        time.sleep(1.5)
+        working([])
     progress({"kind": "end"})
 
 
@@ -108,6 +121,7 @@ while True:
     if method == "initialize":
         caps = (msg["params"].get("capabilities") or {}).get("textDocument", {}).get("publishDiagnostics", {})
         related_ok = bool(caps.get("relatedInformation"))
+        draws_working = bool((msg["params"].get("initializationOptions") or {}).get("drawsWorking"))
         send({"jsonrpc": "2.0", "id": msg["id"], "result": {"capabilities": {
             "textDocumentSync": {"openClose": True, "save": {"includeText": False}, "change": 0},
             "codeActionProvider": True,

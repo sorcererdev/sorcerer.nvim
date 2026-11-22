@@ -28,12 +28,15 @@ function M.attach(buf)
   if name == "" or not vim.uv.fs_stat(name) then return end
   local root = M.root(buf)
   if not root then return end
-  vim.lsp.start({
-    name = "conjure",
-    cmd = opts.cmd,
-    root_dir = root,
-    flags = { debounce_text_changes = 0 },
-  }, { bufnr = buf })
+  vim.lsp.start(
+    vim.tbl_extend("error", {
+      name = "conjure",
+      cmd = opts.cmd,
+      root_dir = root,
+      flags = { debounce_text_changes = 0 },
+    }, require("sorcerer.working").client_config()),
+    { bufnr = buf }
+  )
 end
 
 -- "conjure: <message>" while conjure works on a change, else "".

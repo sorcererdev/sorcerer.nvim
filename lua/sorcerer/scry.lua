@@ -20,7 +20,10 @@ function M.attach(buf)
   if name == "" or not vim.uv.fs_stat(name) then return end
   local root = M.root(buf)
   if not root then return end
-  vim.lsp.start({ name = "scry", cmd = opts.cmd, root_dir = root }, { bufnr = buf })
+  vim.lsp.start(
+    vim.tbl_extend("error", { name = "scry", cmd = opts.cmd, root_dir = root }, require("sorcerer.working").client_config()),
+    { bufnr = buf }
+  )
 end
 
 -- "scry: <message>" while scry reports a review, else "".

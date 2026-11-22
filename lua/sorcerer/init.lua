@@ -24,6 +24,7 @@ function M.setup(opts)
   -- a signs table replaces the default glyphs' keys it names; `false` must survive the merge
   if opts and opts.scry and opts.scry.signs == false then M.opts.scry.signs = false end
   require("sorcerer.signs").setup(M.opts.scry)
+  require("sorcerer.working").setup()
   require("sorcerer.scry").setup(M.opts.scry)
   require("sorcerer.conjure").setup(M.opts.conjure)
 end
