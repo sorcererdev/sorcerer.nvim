@@ -48,6 +48,8 @@ require("sorcerer").setup({
     -- a bug's first sentence at the end of its line
     bug_text = true,
   },
+  -- conjure (below) is off until you turn it on
+  conjure = { enabled = false, cmd = { "conjure", "lsp" } },
 })
 ```
 
@@ -75,10 +77,42 @@ Show why, Show code and Dismiss come through your own code-action key
 (`vim.lsp.buf.code_action()`, usually bound to `<leader>ca` or `gra`) on a finding's line.
 The plugin binds no keys and adds no commands.
 
+## Conjure
+
+[conjure](https://github.com/sorcererdev/sorcerer) writes one small change where you ask, in
+your buffers, and marks it so you can read it, undo it or ask for a stronger attempt. It is
+off by default (a scry user without it installed sees no error). Install it as you did scry
+(`sorcerer-conjure-installer`, or `cargo install sorcerer-conjure`), then turn it on:
+
+```lua
+require("sorcerer").setup({ conjure = { enabled = true } })
+```
+
+It needs a project (a folder with `.sorcerer/`, else a git repository) that you have trusted
+(`conjure trust` in it), and `claude` on your PATH. Bind the code-action key if you have not:
+
+```lua
+vim.keymap.set({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action)
+```
+
+Put the cursor in a function (or select lines) and run the code action **Conjure here**; on a
+line with a scry finding, **Conjure for this finding**. A progress line says `conjuring a
+change`; the change appears in the buffers of every file it touched, unsaved. A **mark** (a
+diagnostic, source `conjure`, on the first changed line of each file) says what it did and what
+it cost, and carries the actions **conjure: Undo**, **conjure: Try harder**, **conjure: Show
+why** and **conjure: Show &lt;file&gt;** for each other file. The marks clear when you save,
+undo or take the next change.
+
+The plugin starts conjure with `debounce_text_changes = 0` (Neovim reports each edit at once,
+so a change never lands over what you type meanwhile) and attaches it to every buffer under
+the project root, including files the change opens. `require("sorcerer").status()` joins the
+two: `scry: reviewing 2 units  conjure: conjuring a change`. `:checkhealth sorcerer` checks
+that `conjure` is found when it is enabled.
+
 ## Tests
 
 `make test` runs the specs with plenary.nvim (found in lazy.nvim's directory, or set `DEPS`).
-A Python stand-in for `scry lsp` (`tests/fake-lsp`) plays the server.
+A Python stand-in for `scry lsp` (`tests/fake-lsp`) plays either server.
 
 ## License
 
