@@ -8,8 +8,17 @@ This plugin is thin: it starts `scry lsp` on the files you open and draws what t
 publishes. It needs Neovim 0.10 or newer and the `scry` binary:
 
 ```sh
-cargo install --git https://github.com/sorcererdev/sorcerer scry
+# macOS and Linux
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/sorcererdev/sorcerer/releases/latest/download/sorcerer-scry-installer.sh | sh
 ```
+
+```powershell
+# Windows
+powershell -ExecutionPolicy ByPass -c "irm https://github.com/sorcererdev/sorcerer/releases/latest/download/sorcerer-scry-installer.ps1 | iex"
+```
+
+With Rust: `cargo install sorcerer-scry`. The installers put `scry` in `~/.local/bin` and need
+neither Rust nor a C compiler.
 
 scry reads its API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `JEV_API_KEY`) from the
 environment Neovim starts in. `scry doctor` in a project checks them.

@@ -1,7 +1,10 @@
 -- :checkhealth sorcerer
 local M = {}
 
-local install = "cargo install --git https://github.com/sorcererdev/sorcerer scry"
+-- the README's install line for this platform
+local install = vim.fn.has("win32") == 1
+  and [[powershell -ExecutionPolicy ByPass -c "irm https://github.com/sorcererdev/sorcerer/releases/latest/download/sorcerer-scry-installer.ps1 | iex"]]
+  or [[curl --proto '=https' --tlsv1.2 -LsSf https://github.com/sorcererdev/sorcerer/releases/latest/download/sorcerer-scry-installer.sh | sh]]
 
 function M.check()
   vim.health.start("sorcerer")
