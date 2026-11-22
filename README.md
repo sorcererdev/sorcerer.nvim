@@ -18,7 +18,8 @@ powershell -ExecutionPolicy ByPass -c "irm https://github.com/sorcererdev/sorcer
 ```
 
 With Rust: `cargo install sorcerer-scry`. The installers put `scry` in `~/.local/bin` and need
-neither Rust nor a C compiler.
+neither Rust nor a C compiler. Neovim started from a terminal finds it there once your shell
+has `~/.local/bin` on PATH; started from a launcher, it may need `scry = { cmd = { "/full/path/to/scry", "lsp" } }` in `setup()`.
 
 scry reads its API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `JEV_API_KEY`) from the
 environment Neovim starts in. `scry doctor` in a project checks them.
