@@ -303,6 +303,30 @@ describe("sorcerer.spellbook :Spellbook new", function()
     assert.equals("spellbook: wrote 2 files · 1 holes, marked; ]d walks them", messages[#messages])
   end)
 
+  it("an apply with no hole to fill (first = null) still ends with the wrote line", function()
+    start({
+      ["spellbook.generators"] = generators,
+      ["spellbook.choices_app"] = { choices = { "bistro" } },
+      ["spellbook.plan"] = plan,
+      ["spellbook.apply"] = { written = { "src/a.py" }, skipped = {}, holes = {}, first = vim.NIL },
+    })
+    pickers({})
+    vim.cmd("Spellbook new command service=booking command=cancel_table")
+    local buf
+    wait(function() local w, b = float(); buf = b; return w ~= nil end)
+    press(buf, "<CR>")
+    wait(function() return #messages > 0 end)
+    assert.equals("spellbook: wrote 1 file", messages[#messages])
+  end)
+
+  it("an input named with a dash is an input, not the generator", function()
+    canned_all()
+    pickers({ 1, "cancel_table" })
+    vim.cmd("Spellbook new command my-input=x")
+    wait(function() return #logged(log, "spellbook.plan") == 1 end)
+    assert.equals("x", logged(log, "spellbook.plan")[1][2]["my-input"])
+  end)
+
   -- a conjure client beside the running spellbook one; the server was started by canned_all
   local function with_conjure(conjure_holes)
     sorcerer.opts.spellbook.conjure_holes = conjure_holes
@@ -345,6 +369,7 @@ describe("sorcerer.spellbook :Spellbook new", function()
     stop_all()
     vim.cmd("silent! %bwipeout!")
     vim.cmd("Spellbook new")
-    assert.equals("spellbook: open a file in the project first", messages[1])
+    assert.truthy(messages[1]:find("open a file in the project first", 1, true))
+    assert.truthy(messages[1]:find("spellbook.enabled", 1, true))
   end)
 end)

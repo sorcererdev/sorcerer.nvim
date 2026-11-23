@@ -51,6 +51,16 @@ local function request(client, method, params, handler)
   end
 end
 
+-- VALUE with every JSON null (`vim.NIL`, which is truthy) taken out, so a reply's `first = null`
+-- is nil to the code that reads it.
+local function without_nulls(value)
+  if value == vim.NIL then return nil end
+  if type(value) ~= "table" then return value end
+  local clean = {}
+  for key, item in pairs(value) do clean[key] = without_nulls(item) end
+  return clean
+end
+
 -- Run the server COMMAND with ARGUMENTS; HANDLER(reply). A failed request says so.
 local function command(client, name, arguments, handler)
   request(client, "workspace/executeCommand", { command = name, arguments = arguments }, function(err, reply)
@@ -58,7 +68,7 @@ local function command(client, name, arguments, handler)
       vim.notify(("spellbook: %s failed: %s"):format(name, err and err.message or "no reply"), vim.log.levels.ERROR)
       return
     end
-    handler(reply)
+    handler(without_nulls(reply))
   end)
 end
 
@@ -176,14 +186,21 @@ local function finish(client, reply)
   local abs = vim.fs.normalize(vim.fs.joinpath(client.config.root_dir, first.file))
   local waited, timer = 0, assert(vim.uv.new_timer())
   timer:start(0, 50, vim.schedule_wrap(function()
-    local shown = vim.fs.normalize(vim.api.nvim_buf_get_name(0)) == abs
+    local shown = false
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      local name = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win))
+      if name ~= "" and vim.fs.normalize(name) == abs then shown = true end
+    end
     waited = waited + 50
     if not shown and waited <= M.show_wait_ms then return end
     timer:stop()
     timer:close()
     if not shown then
-      vim.cmd.edit(vim.fn.fnameescape(abs))
-      pcall(vim.api.nvim_win_set_cursor, 0, { first.line, 0 })
+      if pcall(vim.cmd.edit, vim.fn.fnameescape(abs)) then
+        pcall(vim.api.nvim_win_set_cursor, 0, { first.line, 0 })
+      else
+        say(("spellbook: could not open %s; the first hole is at line %d"):format(abs, first.line), vim.log.levels.WARN)
+      end
     end
     end_line()
   end))
@@ -202,10 +219,12 @@ end
 -- `:Spellbook new [generator] [input=value…]`: pick, answer, preview the plan, apply.
 function M.new(args)
   local client = client_here()
-  if not client then return say("spellbook: open a file in the project first", vim.log.levels.WARN) end
+  if not client then
+    return say("spellbook: open a file in the project first (and check `spellbook.enabled` and that the spellbook binary is installed)", vim.log.levels.WARN)
+  end
   local named, given = nil, {}
   for _, arg in ipairs(args) do
-    local name, value = arg:match("^([%w_]+)=(.*)$")
+    local name, value = arg:match("^([%w_%-]+)=(.*)$")
     if name then given[name] = value else named = arg end
   end
   command(client, "spellbook.generators", {}, function(generators)
