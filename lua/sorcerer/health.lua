@@ -1,15 +1,8 @@
 -- :checkhealth sorcerer
 local M = {}
 
--- the README's install line for this platform
-local install = vim.fn.has("win32") == 1
-  and [[powershell -ExecutionPolicy ByPass -c "irm https://github.com/sorcererdev/sorcerer/releases/latest/download/sorcerer-scry-installer.ps1 | iex"]]
-  or [[curl --proto '=https' --tlsv1.2 -LsSf https://github.com/sorcererdev/sorcerer/releases/latest/download/sorcerer-scry-installer.sh | sh]]
-
--- the same for conjure
-local conjure_install = vim.fn.has("win32") == 1
-  and [[powershell -ExecutionPolicy ByPass -c "irm https://github.com/sorcererdev/sorcerer/releases/latest/download/sorcerer-conjure-installer.ps1 | iex"]]
-  or [[curl --proto '=https' --tlsv1.2 -LsSf https://github.com/sorcererdev/sorcerer/releases/latest/download/sorcerer-conjure-installer.sh | sh]]
+local install = require("sorcerer.program").install.scry
+local conjure_install = require("sorcerer.program").install.conjure
 
 -- The `conjure` section: only when conjure is enabled in setup().
 local function check_conjure()

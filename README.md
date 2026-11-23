@@ -62,7 +62,10 @@ require("sorcerer").setup({
   review is dimmed.
 - The first time a project's own config asks for something that runs code, scry asks whether
   to trust the project. Answer in the prompt Neovim shows.
-- `:checkhealth sorcerer` checks that `scry` is found.
+- `:checkhealth sorcerer` checks that `scry` is found. If it is missing, Neovim says so once
+  a session (not on every file) and starts no server.
+- Tip: `vim.diagnostic.config({ float = { source = true } })` makes the diagnostic float show
+  which tool (`scry`) said it.
 
 ## Status line
 
