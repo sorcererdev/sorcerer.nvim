@@ -100,7 +100,7 @@ require("sorcerer").setup({ conjure = { enabled = true } })
 ```
 
 It needs a project (a folder with `.sorcerer/`, else a git repository) that you have trusted
-(`conjure trust` in it), and `claude` on your PATH. Bind the code-action key if you have not:
+(`conjure trust` in it), and either `claude` on your PATH or an `ANTHROPIC_API_KEY` in your environment. Bind the code-action key if you have not:
 
 ```lua
 vim.keymap.set({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action)
