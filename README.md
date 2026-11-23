@@ -71,6 +71,14 @@ require("sorcerer").setup({
 A failed review ends with `review failed, see "scry log"`, shown by your own progress display
 (fidget, `vim.lsp.status()`).
 
+## Work in progress
+
+While scry reviews or conjure writes, grey text sits at the end of the first line of each unit
+being worked on: `⟳ scry: reviewing…`, `⟳ conjure: writing…`. It is drawn from the server's
+`sorcerer/working` notification (the plugin tells the server at start that it draws it), moves
+with the line as you edit, and goes when the work ends or the server exits. Its highlight is
+`SorcererWorking` (linked to `Comment`; set your own to change it). The status line stays.
+
 ## Actions
 
 Show why, Show code and Dismiss come through your own code-action key
