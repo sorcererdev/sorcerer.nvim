@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# A stand-in for `scry lsp` in tests, started as `fake-lsp lsp` (the argument is ignored).
+# A stand-in for `scry lsp` (or, with $FAKE_LSP_NAME, another server) in tests, started as `fake-lsp lsp` (the argument is ignored).
 # It announces what scry announces (open/close/save sync without text, code actions, the
 # three scry.* commands) and records every message it gets to $FAKE_LSP_LOG (one JSON per
 # line). On textDocument/didSave it does what the real server does: a
@@ -51,6 +51,21 @@ def send(msg):
 def canned(name):
     path = os.path.join(os.environ.get("FAKE_LSP_REPLIES", "/nonexistent"), name)
     return json.load(open(path)) if os.path.exists(path) else None
+
+
+def reply_for(method, params):
+    # an executeCommand is answered from workspace_executeCommand_<command>.json, first from
+    # ..._<command>_<last argument>.json when the last argument is text (spellbook.choices
+    # asks for each input by name)
+    if method == "workspace/executeCommand":
+        base = "workspace_executeCommand_" + params["command"]
+        last = (params.get("arguments") or [None])[-1]
+        if isinstance(last, str):
+            named = canned(base + "_" + last + ".json")
+            if named is not None:
+                return named
+        return canned(base + ".json")
+    return canned(method.replace("/", "_") + ".json")
 
 
 def utf16_len(s):
@@ -126,7 +141,7 @@ while True:
             "textDocumentSync": {"openClose": True, "save": {"includeText": False}, "change": 0},
             "codeActionProvider": True,
             "executeCommandProvider": {"commands": ["scry.why", "scry.showCode", "scry.dismiss"]},
-        }, "serverInfo": {"name": "scry"}}})
+        }, "serverInfo": {"name": os.environ.get("FAKE_LSP_NAME", "scry")}}})
     elif method == "shutdown":
         send({"jsonrpc": "2.0", "id": msg["id"], "result": None})
     elif method == "exit":
@@ -134,4 +149,4 @@ while True:
     elif method == "textDocument/didSave":
         on_save(msg["params"]["textDocument"]["uri"])
     elif "id" in msg:
-        send({"jsonrpc": "2.0", "id": msg["id"], "result": canned(method.replace("/", "_") + ".json")})
+        send({"jsonrpc": "2.0", "id": msg["id"], "result": reply_for(method, msg["params"])})

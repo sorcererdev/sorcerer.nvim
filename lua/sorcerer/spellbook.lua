@@ -1,0 +1,279 @@
+-- spellbook's language server: `spellbook lsp`, the sorcerer suite's generators and rules. The
+-- server shows each open hole of a generated file as a mark (a diagnostic) on save and open, and
+-- runs the four commands `:Spellbook new` asks with Neovim's own pickers.
+-- spellbook is attached to every buffer under the project root, so it sees each file opened or
+-- saved; one client a project root (Neovim reuses a client with the same name and root). The
+-- root is the nearest `.sorcerer/` upward, else the nearest `.git`, the server's own order.
+local M = {}
+
+local opts = nil
+
+-- The project root of buffer BUF, or nil.
+function M.root(buf)
+  return vim.fs.root(buf, ".sorcerer") or vim.fs.root(buf, ".git")
+end
+
+-- Attach spellbook to buffer BUF when it is enabled and BUF is a file under a project root.
+function M.attach(buf)
+  if not opts or not opts.enabled then return end
+  if not vim.api.nvim_buf_is_valid(buf) or vim.bo[buf].buftype ~= "" then return end
+  local name = vim.api.nvim_buf_get_name(buf)
+  if name == "" or not vim.uv.fs_stat(name) then return end
+  local root = M.root(buf)
+  if not root then return end
+  if not require("sorcerer.program").runnable("spellbook", opts.cmd) then return end
+  vim.lsp.start({ name = "spellbook", cmd = opts.cmd, root_dir = root }, { bufnr = buf })
+end
+
+-- spellbook shows no progress line, so it has nothing for the status line.
+function M.status()
+  return ""
+end
+
+-- ---- :Spellbook new ----
+-- The one place a client here holds more than the three replies' shapes: it asks the server for
+-- the generators, the choices of an input and the plan, with the editor's own pickers, then
+-- applies. The replies are `{ stop = <sentence> }` (with `input` and `choices` for a missing
+-- input) or: generators `[{ id, name, summary, inputs = [{ name, type, prompt, optional }] }]`,
+-- choices `{ choices }`, a plan `{ id, generator, files = [{ path, status, text, lines }],
+-- holes = [{ name, kind, instruction, source, places = [{ file, line }] }] }`, and an apply
+-- `{ written, skipped, refused, holes, first = { file, line } }`.
+
+-- how long to wait for the server's own `window/showDocument` to open the first hole
+M.show_wait_ms = 2000
+
+-- Ask CLIENT for METHOD; HANDLER(err, result, ctx). Neovim 0.11 made `request` a method.
+local function request(client, method, params, handler)
+  if vim.fn.has("nvim-0.11") == 1 then
+    client:request(method, params, handler)
+  else
+    client.request(method, params, handler)
+  end
+end
+
+-- VALUE with every JSON null (`vim.NIL`, which is truthy) taken out, so a reply's `first = null`
+-- is nil to the code that reads it.
+local function without_nulls(value)
+  if value == vim.NIL then return nil end
+  if type(value) ~= "table" then return value end
+  local clean = {}
+  for key, item in pairs(value) do clean[key] = without_nulls(item) end
+  return clean
+end
+
+-- Run the server COMMAND with ARGUMENTS; HANDLER(reply). A failed request says so.
+local function command(client, name, arguments, handler)
+  request(client, "workspace/executeCommand", { command = name, arguments = arguments }, function(err, reply)
+    if err or reply == nil then
+      vim.notify(("spellbook: %s failed: %s"):format(name, err and err.message or "no reply"), vim.log.levels.ERROR)
+      return
+    end
+    handler(without_nulls(reply))
+  end)
+end
+
+local function say(text, level)
+  vim.notify(text, level or vim.log.levels.INFO)
+end
+
+-- The spellbook client of the current buffer's project, or nil.
+local function client_here()
+  local buf = vim.api.nvim_get_current_buf()
+  local here = vim.lsp.get_clients({ name = "spellbook", bufnr = buf })[1]
+  if here then return here end
+  local root = M.root(buf)
+  for _, client in ipairs(vim.lsp.get_clients({ name = "spellbook" })) do
+    if client.config.root_dir == root then return client end
+  end
+end
+
+-- Ask the value of INPUT (the generator's input table); DONE(value) with nil for a cancel.
+-- CHOICES are the values of an enum, already known.
+local function ask_value(input, choices, done)
+  if choices then
+    local items = vim.list_extend(input.optional and { "(skip)" } or {}, choices)
+    vim.ui.select(items, { prompt = input.prompt }, function(item)
+      if item == "(skip)" then item = "" end
+      done(item)
+    end)
+  else
+    local prompt = input.prompt .. (input.optional and " (empty to skip)" or "") .. ": "
+    vim.ui.input({ prompt = prompt }, function(text)
+      if text ~= nil then text = vim.trim(text) end
+      done(text)
+    end)
+  end
+end
+
+-- Resolve each of GENERATOR's inputs in order, the given ones kept; DONE(inputs).
+local function ask_inputs(client, generator, given, done)
+  local values = vim.deepcopy(given)
+  local function step(i)
+    local input = generator.inputs[i]
+    if not input then return done(values) end
+    local function take(value)
+      if value == nil then return end -- cancelled
+      if value ~= "" then values[input.name] = value end
+      step(i + 1)
+    end
+    if values[input.name] then return step(i + 1) end
+    if input.type ~= "enum" then return ask_value(input, nil, take) end
+    command(client, "spellbook.choices", { generator.id, values, input.name }, function(reply)
+      if reply.stop then return say(reply.stop, vim.log.levels.WARN) end
+      if #reply.choices == 1 and not input.optional then return take(reply.choices[1]) end
+      ask_value(input, reply.choices, take)
+    end)
+  end
+  step(1)
+end
+
+-- The plan for GENERATOR and VALUES; a stop that names an input asks that input once more.
+local function make_plan(client, generator, values, retried, done)
+  command(client, "spellbook.plan", { generator.id, values }, function(reply)
+    if not reply.stop then return done(reply) end
+    if reply.input and not retried then
+      local input = vim.tbl_filter(function(i) return i.name == reply.input end, generator.inputs)[1]
+      if input then
+        say(reply.stop, vim.log.levels.WARN)
+        return ask_value(input, #(reply.choices or {}) > 0 and reply.choices or nil, function(value)
+          if value == nil or value == "" then return end
+          values[input.name] = value
+          make_plan(client, generator, values, true, done)
+        end)
+      end
+    end
+    say(reply.stop, vim.log.levels.WARN)
+  end)
+end
+
+-- The conjure client of the project CLIENT serves, or nil.
+local function conjure_for(client)
+  for _, c in ipairs(vim.lsp.get_clients({ name = "conjure" })) do
+    if c.config.root_dir == client.config.root_dir then return c end
+  end
+end
+
+local function holes_to_fill(holes)
+  local n = 0
+  for _, hole in ipairs(holes or {}) do
+    if hole.source == "placeholder" then n = n + 1 end
+  end
+  return n
+end
+
+-- After an apply: the first hole's file open, the end line, and conjure on the first hole when
+-- asked. The server asks the editor to show the file; when it has not within the wait, do it.
+local function finish(client, reply)
+  local first = reply.first
+  local conjure = conjure_for(client)
+  local function end_line()
+    local n = holes_to_fill(reply.holes)
+    local text = ("spellbook: wrote %d %s"):format(#reply.written, #reply.written == 1 and "file" or "files")
+    if n > 0 then
+      text = text .. (conjure and (" · %d holes · <leader>ca to conjure the first"):format(n)
+        or (" · %d holes, marked; ]d walks them"):format(n))
+    end
+    say(text)
+    if first and conjure and opts and opts.conjure_holes then
+      local abs = vim.fs.joinpath(client.config.root_dir, first.file)
+      request(conjure, "workspace/executeCommand", {
+        command = "conjure.conjure",
+        arguments = { vim.uri_from_fname(abs), first.line },
+      }, function() end)
+    end
+  end
+  if not first then return end_line() end
+  local abs = vim.fs.normalize(vim.fs.joinpath(client.config.root_dir, first.file))
+  local waited, timer = 0, assert(vim.uv.new_timer())
+  timer:start(0, 50, vim.schedule_wrap(function()
+    local shown = false
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      local name = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win))
+      if name ~= "" and vim.fs.normalize(name) == abs then shown = true end
+    end
+    waited = waited + 50
+    if not shown and waited <= M.show_wait_ms then return end
+    timer:stop()
+    timer:close()
+    if not shown then
+      if pcall(vim.cmd.edit, vim.fn.fnameescape(abs)) then
+        pcall(vim.api.nvim_win_set_cursor, 0, { first.line, 0 })
+      else
+        say(("spellbook: could not open %s; the first hole is at line %d"):format(abs, first.line), vim.log.levels.WARN)
+      end
+    end
+    end_line()
+  end))
+end
+
+local function apply(client, plan)
+  command(client, "spellbook.apply", { plan.id }, function(reply)
+    if reply.stop then return say(reply.stop, vim.log.levels.WARN) end
+    if reply.refused and reply.refused ~= vim.NIL then
+      say(("spellbook: %s was not written: %s"):format(reply.refused.path, reply.refused.why), vim.log.levels.WARN)
+    end
+    finish(client, reply)
+  end)
+end
+
+-- `:Spellbook new [generator] [input=value…]`: pick, answer, preview the plan, apply.
+function M.new(args)
+  local client = client_here()
+  if not client then
+    return say("spellbook: open a file in the project first (and check `spellbook.enabled` and that the spellbook binary is installed)", vim.log.levels.WARN)
+  end
+  local named, given = nil, {}
+  for _, arg in ipairs(args) do
+    local name, value = arg:match("^([%w_%-]+)=(.*)$")
+    if name then given[name] = value else named = arg end
+  end
+  command(client, "spellbook.generators", {}, function(generators)
+    local function with(generator)
+      ask_inputs(client, generator, given, function(values)
+        make_plan(client, generator, values, false, function(plan)
+          require("sorcerer.spellbook_plan").show(plan, function() apply(client, plan) end)
+        end)
+      end)
+    end
+    if named then
+      local generator = vim.tbl_filter(function(g) return g.id == named end, generators)[1]
+      if not generator then return say(("spellbook: no generator named %s"):format(named), vim.log.levels.WARN) end
+      return with(generator)
+    end
+    if #generators == 0 then return say("spellbook: this project has no generators", vim.log.levels.WARN) end
+    vim.ui.select(generators, {
+      prompt = "Generator",
+      format_item = function(g) return g.name .. " — " .. g.summary end,
+    }, function(generator)
+      if generator then with(generator) end
+    end)
+  end)
+end
+
+-- OPTS is the `spellbook` table of setup.
+function M.setup(o)
+  opts = o
+  vim.api.nvim_create_user_command("Spellbook", function(c)
+    local sub = table.remove(c.fargs, 1)
+    if sub == "new" then return M.new(c.fargs) end
+    say("spellbook: use `:Spellbook new [generator] [input=value…]`", vim.log.levels.WARN)
+  end, {
+    nargs = "*",
+    complete = function(lead, line)
+      if not line:match("^%s*Spellbook%s+%S*$") then return {} end
+      return vim.tbl_filter(function(s) return vim.startswith(s, lead) end, { "new" })
+    end,
+    desc = "spellbook: write a generator's files",
+  })
+  require("sorcerer.program").forget()
+  local group = vim.api.nvim_create_augroup("sorcerer_spellbook", { clear = true })
+  vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile", "BufWritePost", "BufEnter" }, {
+    group = group,
+    callback = function(a) M.attach(a.buf) end,
+  })
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(buf) then M.attach(buf) end
+  end
+end
+
+return M

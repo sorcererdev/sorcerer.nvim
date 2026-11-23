@@ -120,10 +120,40 @@ the project root, including files the change opens. `require("sorcerer").status(
 two: `scry: reviewing 2 units  conjure: conjuring a change`. `:checkhealth sorcerer` checks
 that `conjure` is found when it is enabled.
 
+## Spellbook
+
+[spellbook](https://github.com/sorcererdev/sorcerer) keeps a project's conventions as
+generators: `:Spellbook new` writes every file of one (a command and its test, say) after a
+preview, and leaves each **hole** (code that parses and says what belongs there) marked on its
+line. It is off by default, calls no model and needs no key. No installer is published yet:
+`cargo install --git https://github.com/sorcererdev/sorcerer sorcerer-spellbook`. Then:
+
+```lua
+require("sorcerer").setup({ spellbook = { enabled = true } })
+vim.keymap.set("n", "<leader>sn", "<cmd>Spellbook new<cr>")
+```
+
+`:Spellbook new [generator] [input=value…]` picks the generator and asks each input with
+`vim.ui.select` and `vim.ui.input` (so your picker plugin shows them), shows the plan in a float
+(`<CR>` applies, `q` cancels), writes the files, opens the first one on its first hole and marks
+every hole (an Information diagnostic, source `spellbook`; `]d` walks them). The marks follow the
+file on disk: save a file with a placeholder replaced and its mark goes. When conjure is on, a
+hole's line already offers **Conjure here**, and the end line says `<leader>ca to conjure the
+first`; with `conjure_holes = true` the plugin runs conjure on the first hole for you.
+
+| setting | default | |
+|---|---|---|
+| `spellbook.enabled` | `false` | start `spellbook lsp` for the files you open |
+| `spellbook.cmd` | `{ "spellbook", "lsp" }` | the program, if not on your PATH |
+| `spellbook.conjure_holes` | `false` | conjure the first hole after `:Spellbook new` |
+
+The project must be trusted (`spellbook trust`) when its own config runs code.
+`:checkhealth sorcerer` checks that `spellbook` is found when it is enabled.
+
 ## Tests
 
 `make test` runs the specs with plenary.nvim (found in lazy.nvim's directory, or set `DEPS`).
-A Python stand-in for `scry lsp` (`tests/fake-lsp`) plays either server.
+A Python stand-in for `scry lsp` (`tests/fake-lsp`) plays any of the servers.
 
 ## License
 

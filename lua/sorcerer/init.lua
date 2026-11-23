@@ -1,6 +1,7 @@
 -- sorcerer.nvim: scry (the sorcerer suite's reviewer) in Neovim. Saving a file makes scry
 -- review what changed and put each verified finding on its line; nothing to say, nothing shown.
 -- conjure (the writer) is opt-in beside it: a code action writes one change and marks it.
+-- spellbook (generators with holes, and rules) is opt-in too: `:Spellbook new`.
 local M = {}
 
 M.defaults = {
@@ -17,6 +18,13 @@ M.defaults = {
     enabled = false,
     cmd = { "conjure", "lsp" },
   },
+  -- off by default: a user without spellbook installed sees no start error
+  spellbook = {
+    enabled = false,
+    cmd = { "spellbook", "lsp" },
+    -- after `:Spellbook new`, run conjure on the first hole (needs conjure enabled too)
+    conjure_holes = false,
+  },
 }
 
 function M.setup(opts)
@@ -27,13 +35,19 @@ function M.setup(opts)
   require("sorcerer.working").setup()
   require("sorcerer.scry").setup(M.opts.scry)
   require("sorcerer.conjure").setup(M.opts.conjure)
+  require("sorcerer.spellbook").setup(M.opts.spellbook)
 end
 
 -- For a status line: "scry: reviewing 2 units" while scry reviews, "conjure: conjuring a
 -- change" while conjure writes (both, joined by two spaces, when both work), else "".
 function M.status()
   local lines = {}
-  for _, line in ipairs({ require("sorcerer.scry").status(), require("sorcerer.conjure").status() }) do
+  local statuses = {
+    require("sorcerer.scry").status(),
+    require("sorcerer.conjure").status(),
+    require("sorcerer.spellbook").status(),
+  }
+  for _, line in ipairs(statuses) do
     if line ~= "" then table.insert(lines, line) end
   end
   return table.concat(lines, "  ")
