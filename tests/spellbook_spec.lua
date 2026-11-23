@@ -303,14 +303,9 @@ describe("sorcerer.spellbook :Spellbook new", function()
     assert.equals("spellbook: wrote 2 files · 1 holes, marked; ]d walks them", messages[#messages])
   end)
 
+  -- a conjure client beside the running spellbook one; the server was started by canned_all
   local function with_conjure(conjure_holes)
-    stop_all()
-    sorcerer.setup({
-      scry = { enabled = false },
-      spellbook = { enabled = true, cmd = { fake, "lsp" }, conjure_holes = conjure_holes },
-    })
-    vim.cmd.edit(root .. "/src/b.py")
-    wait(function() return #clients() == 1 end)
+    sorcerer.opts.spellbook.conjure_holes = conjure_holes
     -- a second fake, named conjure, with its own log
     local conjure_log = vim.fn.tempname()
     vim.env.FAKE_LSP_LOG, vim.env.FAKE_LSP_NAME = conjure_log, "conjure"
