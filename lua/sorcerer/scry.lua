@@ -20,6 +20,7 @@ function M.attach(buf)
   if name == "" or not vim.uv.fs_stat(name) then return end
   local root = M.root(buf)
   if not root then return end
+  if not require("sorcerer.program").runnable("scry", opts.cmd) then return end
   vim.lsp.start(
     vim.tbl_extend("error", { name = "scry", cmd = opts.cmd, root_dir = root }, require("sorcerer.working").client_config()),
     { bufnr = buf }
@@ -50,6 +51,7 @@ end
 function M.setup(o)
   opts = o
   work, latest = {}, nil
+  require("sorcerer.program").forget()
   local group = vim.api.nvim_create_augroup("sorcerer_scry", { clear = true })
   vim.api.nvim_create_autocmd("LspProgress", { group = group, callback = follow_progress })
   vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile", "BufWritePost" }, {
