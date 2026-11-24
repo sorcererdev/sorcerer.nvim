@@ -170,7 +170,8 @@ local function finish(client, reply)
     local n = holes_to_fill(reply.holes)
     local text = ("spellbook: wrote %d %s"):format(#reply.written, #reply.written == 1 and "file" or "files")
     if n > 0 then
-      text = text .. (conjure and (" · %d holes · <leader>ca to conjure the first"):format(n)
+      local key = require("sorcerer.keys").lhs("conjure")
+      text = text .. (conjure and (" · %d holes · %s to conjure the first"):format(n, key or "Conjure here (a code action)")
         or (" · %d holes, marked; ]d walks them"):format(n))
     end
     say(text)
@@ -250,18 +251,59 @@ function M.new(args)
   end)
 end
 
+-- ---- :Spellbook check ----
+
+-- The quickfix items of `spellbook check --json`'s FINDINGS, their files under ROOT.
+-- Example: { rule = "commands-use-ports", file = "src/a.py", line = 2, severity = "error" }
+-- becomes an `E` item at src/a.py:2.
+local function check_items(findings, root)
+  local types = { error = "E", warn = "W", hint = "I" }
+  local items = {}
+  for _, f in ipairs(findings) do
+    table.insert(items, {
+      filename = vim.fs.joinpath(root, f.file),
+      lnum = f.line,
+      type = types[f.severity] or "I",
+      text = ("%s: %s"):format(f.rule, f.message),
+    })
+  end
+  return items
+end
+
+-- `:Spellbook check`: run the rules over the project and list the findings in the quickfix
+-- list (opened when there are any), else say the conventions hold.
+function M.check()
+  local root = M.root(0) or vim.uv.cwd()
+  local cmd = { opts and opts.cmd and opts.cmd[1] or "spellbook", "check", "--json" }
+  vim.system(cmd, { cwd = root, text = true }, vim.schedule_wrap(function(done)
+    if done.code ~= 0 and done.code ~= 1 then
+      local why = vim.trim((done.stderr or "") ~= "" and done.stderr or (done.stdout or ""))
+      return say(("spellbook: check could not run: %s"):format(why), vim.log.levels.ERROR)
+    end
+    local ok, report = pcall(vim.json.decode, done.stdout or "")
+    if not ok or type(report) ~= "table" then
+      return say("spellbook: check printed something unreadable", vim.log.levels.ERROR)
+    end
+    local items = check_items(report.findings or {}, root)
+    vim.fn.setqflist({}, " ", { title = "spellbook check", items = items })
+    if #items == 0 then return say("spellbook: conventions hold") end
+    vim.cmd("copen")
+  end))
+end
+
 -- OPTS is the `spellbook` table of setup.
 function M.setup(o)
   opts = o
   vim.api.nvim_create_user_command("Spellbook", function(c)
     local sub = table.remove(c.fargs, 1)
     if sub == "new" then return M.new(c.fargs) end
-    say("spellbook: use `:Spellbook new [generator] [input=value…]`", vim.log.levels.WARN)
+    if sub == "check" then return M.check() end
+    say("spellbook: use `:Spellbook new [generator] [input=value…]` or `:Spellbook check`", vim.log.levels.WARN)
   end, {
     nargs = "*",
     complete = function(lead, line)
       if not line:match("^%s*Spellbook%s+%S*$") then return {} end
-      return vim.tbl_filter(function(s) return vim.startswith(s, lead) end, { "new" })
+      return vim.tbl_filter(function(s) return vim.startswith(s, lead) end, { "new", "check" })
     end,
     desc = "spellbook: write a generator's files",
   })

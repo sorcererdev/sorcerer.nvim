@@ -115,7 +115,7 @@ local plan = {
     { path = TEST, status = "new", text = "def t():\n    pass\n", lines = 2 },
   },
   holes = {
-    { name = "handle", kind = "block", instruction = "its first case", source = "placeholder", places = { { file = MAIN, line = 5 } } },
+    { name = "handle", kind = "block", instruction = "its first case", source = "placeholder", places = { { file = MAIN, line = 5, text = "raise NotImplementedError" } } },
     { name = "purpose", kind = "text", instruction = "x", source = "derived", places = { { file = MAIN, line = 1 } } },
   },
 }
@@ -228,10 +228,15 @@ describe("sorcerer.spellbook :Spellbook new", function()
     assert.equals("+ " .. MAIN .. " (5 lines)", lines[2])
     assert.equals("1 hole to fill", lines[4])
     assert.truthy(vim.tbl_contains(lines, "── " .. MAIN .. " ──"))
-    -- the hole's line is lit
-    local lit = vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, { details = true })
+    -- the hole's placeholder is lit (its own span, not the line)
+    local lit = {}
+    for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, { details = true })) do
+      if m[4].hl_group == "SorcererHolePlaceholder" then table.insert(lit, m) end
+    end
     assert.equals(1, #lit)
     assert.equals("raise NotImplementedError", lines[lit[1][2] + 1])
+    assert.equals(0, lit[1][3])
+    assert.equals(#"raise NotImplementedError", lit[1][4].end_col)
   end)
 
   it("given inputs are not asked", function()
@@ -339,16 +344,17 @@ describe("sorcerer.spellbook :Spellbook new", function()
     return conjure_log
   end
 
-  it("the end line names <leader>ca when conjure is attached", function()
+  it("the end line names <leader>mc when conjure is attached", function()
     canned_all()
     local conjure_log = with_conjure(false)
+    require("sorcerer.keys").setup({ keys = sorcerer.opts.keys, conjure = { enabled = true } })
     pickers({})
     vim.cmd("Spellbook new command service=booking command=cancel_table")
     local buf
     wait(function() local w, b = float(); buf = b; return w ~= nil end)
     press(buf, "<CR>")
     wait(function() return #messages > 0 end)
-    assert.equals("spellbook: wrote 2 files · 1 holes · <leader>ca to conjure the first", messages[#messages])
+    assert.equals("spellbook: wrote 2 files · 1 holes · <leader>mc to conjure the first", messages[#messages])
     vim.wait(100)
     assert.equals(0, #logged(conjure_log, "conjure.conjure"))
   end)
@@ -371,5 +377,126 @@ describe("sorcerer.spellbook :Spellbook new", function()
     vim.cmd("Spellbook new")
     assert.truthy(messages[1]:find("open a file in the project first", 1, true))
     assert.truthy(messages[1]:find("spellbook.enabled", 1, true))
+  end)
+end)
+
+-- ---- the plan float in colour ----
+
+describe("sorcerer.spellbook_plan", function()
+  local plan_mod = require("sorcerer.spellbook_plan")
+  local function extmarks(buf)
+    local out = {}
+    for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, { details = true })) do
+      table.insert(out, { row = m[2], col = m[3], hl = m[4].hl_group, end_col = m[4].end_col })
+    end
+    return out
+  end
+  local function shown(files, holes)
+    local plan = { id = "x", generator = "g", files = files, holes = holes or {} }
+    local buf = plan_mod.show(plan, function() end)
+    return buf, vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  end
+  after_each(function()
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_win_get_config(win).relative ~= "" then vim.api.nvim_win_close(win, true) end
+    end
+  end)
+
+  it("a file is coloured as its language, inside its own section only", function()
+    local buf, lines = shown({
+      { path = "a.lua", status = "new", text = "local x = 1\n", lines = 1 },
+      { path = "b.nolang", status = "new", text = "local y = 2\n", lines = 1 },
+    })
+    local first, second
+    for i, l in ipairs(lines) do
+      if l == "local x = 1" then first = i - 1 end
+      if l == "local y = 2" then second = i - 1 end
+    end
+    local on_first, on_second = 0, 0
+    for _, m in ipairs(extmarks(buf)) do
+      if m.hl and m.hl:match("^@.*%.lua$") then
+        if m.row == first then on_first = on_first + 1 end
+        if m.row == second then on_second = on_second + 1 end
+      end
+    end
+    assert.is_true(on_first > 0)
+    assert.equals(0, on_second)
+  end)
+
+  it("a file of no known language is left plain, with no error", function()
+    local buf = shown({ { path = "a.nolang", status = "new", text = "x y z\n", lines = 1 } })
+    for _, m in ipairs(extmarks(buf)) do assert.is_nil(m.hl and m.hl:match("^@")) end
+  end)
+
+  it("a hole's placeholder is lit as its own span", function()
+    local buf, lines = shown(
+      { { path = "a.nolang", status = "new", text = "ok\n  raise X(\"hole\")\n", lines = 2 } },
+      { { name = "h", kind = "block", instruction = "i", source = "placeholder", places = { { file = "a.nolang", line = 2, text = "raise X(\"hole\")" } } } }
+    )
+    local lit
+    for _, m in ipairs(extmarks(buf)) do if m.hl == "SorcererHolePlaceholder" then lit = m end end
+    assert.is_truthy(lit)
+    assert.equals("  raise X(\"hole\")", lines[lit.row + 1])
+    assert.equals(2, lit.col)
+    assert.equals(#lines[lit.row + 1], lit.end_col)
+  end)
+end)
+
+-- ---- :Spellbook check ----
+
+describe("sorcerer.spellbook check", function()
+  local fake_book = vim.fn.fnamemodify("tests/fake-spellbook", ":p")
+  local root, messages, notify
+  before_each(function()
+    stop_all()
+    vim.cmd("silent! %bwipeout!")
+    root = project()
+    messages, notify = {}, vim.notify
+    vim.notify = function(msg) table.insert(messages, msg) end
+    sorcerer.setup({ scry = { enabled = false }, spellbook = { enabled = true, cmd = { fake_book, "lsp" } } })
+    vim.cmd.edit(root .. "/src/a.py")
+    vim.fn.setqflist({}, "r")
+  end)
+  after_each(function()
+    vim.notify = notify
+    vim.env.FAKE_SPELLBOOK_JSON, vim.env.FAKE_SPELLBOOK_EXIT, vim.env.FAKE_SPELLBOOK_STDERR = nil, nil, nil
+    vim.cmd("silent! cclose")
+  end)
+  local function report(findings, code)
+    local path = vim.fn.tempname()
+    vim.fn.writefile({ vim.json.encode({ checked = "now", findings = findings }) }, path)
+    vim.env.FAKE_SPELLBOOK_JSON, vim.env.FAKE_SPELLBOOK_EXIT = path, tostring(code)
+  end
+
+  it("fills the quickfix list from the findings and opens it", function()
+    report({
+      { rule = "commands-use-ports", file = "src/a.py", line = 2, severity = "error", message = "talk to ports" },
+      { rule = "naming", file = "src/b.py", line = 1, severity = "warn", message = "rename" },
+    }, 1)
+    vim.cmd("Spellbook check")
+    wait(function() return #vim.fn.getqflist() == 2 end)
+    local items = vim.fn.getqflist()
+    assert.equals("E", items[1].type)
+    assert.equals("W", items[2].type)
+    assert.equals(2, items[1].lnum)
+    assert.equals("commands-use-ports: talk to ports", items[1].text)
+    assert.equals(vim.fs.joinpath(root, "src/a.py"), vim.api.nvim_buf_get_name(items[1].bufnr))
+    assert.equals("spellbook check", vim.fn.getqflist({ title = 1 }).title)
+    wait(function() return vim.fn.getqflist({ winid = 0 }).winid ~= 0 end)
+  end)
+
+  it("says the conventions hold when there is nothing", function()
+    report({}, 0)
+    vim.cmd("Spellbook check")
+    wait(function() return #messages > 0 end)
+    assert.equals("spellbook: conventions hold", messages[#messages])
+    assert.equals(0, #vim.fn.getqflist())
+  end)
+
+  it("says why when the check could not run", function()
+    vim.env.FAKE_SPELLBOOK_STDERR, vim.env.FAKE_SPELLBOOK_EXIT = "rules.toml: line 3", "2"
+    vim.cmd("Spellbook check")
+    wait(function() return #messages > 0 end)
+    assert.truthy(messages[#messages]:find("rules.toml: line 3", 1, true))
   end)
 end)

@@ -17,6 +17,8 @@ M.defaults = {
   conjure = {
     enabled = false,
     cmd = { "conjure", "lsp" },
+    -- the margin glyph of a conjured change; false gives Neovim's own display back
+    sign = "✦",
   },
   -- off by default: a user without spellbook installed sees no start error
   spellbook = {
@@ -24,18 +26,27 @@ M.defaults = {
     cmd = { "spellbook", "lsp" },
     -- after `:Spellbook new`, run conjure on the first hole (needs conjure enabled too)
     conjure_holes = false,
+    -- how a hole and a rule finding look in the margin; false gives Neovim's own display back
+    signs = { hole = "◇", rule = "≡" },
   },
+  -- sorcerer's keys, `<prefix><key>`; each needs its tool on. Set `keys = false`, or one key to
+  -- `false`, to bind nothing (or that one). A lhs you already mapped is skipped.
+  keys = { prefix = "<leader>m", new = "n", conjure = "c", undo = "u", try_harder = "t", why = "w", check = "k" },
 }
 
 function M.setup(opts)
   M.opts = vim.tbl_deep_extend("force", {}, M.defaults, opts or {})
   -- a signs table replaces the default glyphs' keys it names; `false` must survive the merge
   if opts and opts.scry and opts.scry.signs == false then M.opts.scry.signs = false end
-  require("sorcerer.signs").setup(M.opts.scry)
+  if opts and opts.keys == false then M.opts.keys = false end
+  if opts and opts.spellbook and opts.spellbook.signs == false then M.opts.spellbook.signs = false end
+  if opts and opts.conjure and opts.conjure.sign == false then M.opts.conjure.sign = false end
+  require("sorcerer.signs").setup(M.opts.scry, M.opts)
   require("sorcerer.working").setup()
   require("sorcerer.scry").setup(M.opts.scry)
   require("sorcerer.conjure").setup(M.opts.conjure)
   require("sorcerer.spellbook").setup(M.opts.spellbook)
+  require("sorcerer.keys").setup(M.opts)
 end
 
 -- For a status line: "scry: reviewing 2 units" while scry reviews, "conjure: conjuring a

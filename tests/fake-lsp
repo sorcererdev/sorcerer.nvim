@@ -140,7 +140,7 @@ while True:
         send({"jsonrpc": "2.0", "id": msg["id"], "result": {"capabilities": {
             "textDocumentSync": {"openClose": True, "save": {"includeText": False}, "change": 0},
             "codeActionProvider": True,
-            "executeCommandProvider": {"commands": ["scry.why", "scry.showCode", "scry.dismiss"]},
+            "executeCommandProvider": {"commands": ["scry.why", "scry.showCode", "scry.dismiss", "conjure.conjure", "conjure.undo", "conjure.why"]},
         }, "serverInfo": {"name": os.environ.get("FAKE_LSP_NAME", "scry")}}})
     elif method == "shutdown":
         send({"jsonrpc": "2.0", "id": msg["id"], "result": None})
