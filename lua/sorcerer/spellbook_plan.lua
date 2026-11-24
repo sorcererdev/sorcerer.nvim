@@ -46,7 +46,8 @@ end
 function M.highlight(buf, sections)
   for _, section in ipairs(sections) do
     local ft = vim.filetype.match({ filename = section.path })
-    local lang = ft and vim.treesitter.language.get_lang(ft)
+    -- Neovim 0.10 knows a language only once it is loaded, so the filetype itself is the fallback
+    local lang = ft and (vim.treesitter.language.get_lang(ft) or ft)
     local ok, parser = false, nil
     if lang then ok, parser = pcall(vim.treesitter.get_string_parser, section.text, lang) end
     local query = ok and vim.treesitter.query.get(lang, "highlights")
