@@ -82,11 +82,47 @@ being worked on: `⟳ scry: reviewing…`, `⟳ conjure: writing…`. It is draw
 with the line as you edit, and goes when the work ends or the server exits. Its highlight is
 `SorcererWorking` (linked to `Comment`; set your own to change it). The status line stays.
 
+## Keys
+
+sorcerer binds its keys under one prefix, `<leader>m`, for the tools you turned on:
+
+| key | does | needs |
+|---|---|---|
+| `<leader>mn` | `:Spellbook new`, a generator's files | spellbook |
+| `<leader>mc` | conjure here (normal and visual) | conjure |
+| `<leader>mu` | undo the conjured change | conjure |
+| `<leader>mt` | try the change again, harder | conjure |
+| `<leader>mw` | show why the change was made | conjure |
+| `<leader>mk` | `:Spellbook check`, the rules over the project into the quickfix list | spellbook |
+
+`conjure` and `undo` are the code actions **Conjure here** and **conjure: Undo** on the cursor's
+line, so a line offers what it always did. Change a key, or one `false` to skip it:
+`keys = { prefix = "<leader>m", undo = false, check = "x" }`; `keys = false` binds none. A key you
+have already mapped is never overwritten: it is skipped and `:checkhealth sorcerer` lists it.
+
+`:Spellbook check` runs `spellbook check --json` in the project root and fills the quickfix list
+(opened when there are findings, else it says `spellbook: conventions hold`).
+
+## Three looks
+
+Holes, rule findings and conjured changes each have their own mark, apart from scry's and from
+each other. Each is a glyph in the sign column drawn by the plugin (`false` gives Neovim's own
+display back):
+
+| mark | glyph (setting) | groups (all `default = true` links) |
+|---|---|---|
+| a hole | `◇` (`spellbook.signs.hole`), and the placeholder itself underlined | `SorcererHole` (`Special`), `SorcererHolePlaceholder` (`DiagnosticUnderlineHint`) |
+| a rule finding | `≡` (`spellbook.signs.rule`) | `SorcererRuleError`, `SorcererRuleWarn`, `SorcererRuleHint` by severity (`DiagnosticSign*`) |
+| a conjured change | `✦` (`conjure.sign`), its line number tinted | `SorcererConjured` (`DiagnosticSignOk`) |
+
+The plan float from `:Spellbook new` also colours each new file as its language, with the
+tree-sitter parser you have for it (a file whose language has no parser stays plain).
+
 ## Actions
 
 Show why, Show code and Dismiss come through your own code-action key
-(`vim.lsp.buf.code_action()`, usually bound to `<leader>ca` or `gra`) on a finding's line.
-The plugin binds no keys and adds no commands.
+(`vim.lsp.buf.code_action()`, usually `gra`) on a finding's line; scry's own actions have no
+`<leader>m` key. The `<leader>m` keys above are the plugin's only maps.
 
 ## Conjure
 
@@ -100,11 +136,7 @@ require("sorcerer").setup({ conjure = { enabled = true } })
 ```
 
 It needs a project (a folder with `.sorcerer/`, else a git repository) that you have trusted
-(`conjure trust` in it), and either `claude` on your PATH or an `ANTHROPIC_API_KEY` in your environment. Bind the code-action key if you have not:
-
-```lua
-vim.keymap.set({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action)
-```
+(`conjure trust` in it), and either `claude` on your PATH or an `ANTHROPIC_API_KEY` in your environment. The keys below (`<leader>mc`) run it; no code-action key is needed.
 
 Put the cursor in a function (or select lines) and run the code action **Conjure here**; on a
 line with a scry finding, **Conjure for this finding**. A progress line says `conjuring a
@@ -130,7 +162,6 @@ line. It is off by default, calls no model and needs no key. No installer is pub
 
 ```lua
 require("sorcerer").setup({ spellbook = { enabled = true } })
-vim.keymap.set("n", "<leader>sn", "<cmd>Spellbook new<cr>")
 ```
 
 `:Spellbook new [generator] [input=value…]` picks the generator and asks each input with
@@ -138,7 +169,7 @@ vim.keymap.set("n", "<leader>sn", "<cmd>Spellbook new<cr>")
 (`<CR>` applies, `q` cancels), writes the files, opens the first one on its first hole and marks
 every hole (an Information diagnostic, source `spellbook`; `]d` walks them). The marks follow the
 file on disk: save a file with a placeholder replaced and its mark goes. When conjure is on, a
-hole's line already offers **Conjure here**, and the end line says `<leader>ca to conjure the
+hole's line already offers **Conjure here**, and the end line says `<leader>mc to conjure the
 first`; with `conjure_holes = true` the plugin runs conjure on the first hole for you.
 
 | setting | default | |

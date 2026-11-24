@@ -43,7 +43,20 @@ local function check_spellbook()
   vim.health.info('"spellbook doctor" in a project checks the generators, the languages and the trust')
 end
 
+-- The `keys` section: what is bound, and what was skipped because you had mapped it.
+local function check_keys()
+  local keys = require("sorcerer.keys")
+  local bound, skipped = keys.bound(), keys.skipped()
+  if #bound == 0 and #skipped == 0 then return end
+  vim.health.start("sorcerer: keys")
+  for _, one in ipairs(bound) do vim.health.ok(("%s is %s"):format(one.name, one.lhs)) end
+  for _, one in ipairs(skipped) do
+    vim.health.warn(("%s: %s is already mapped, left alone"):format(one.name, one.lhs), { "map another key in setup(): keys = { " .. one.name .. ' = "<key>" }' })
+  end
+end
+
 function M.check()
+  check_keys()
   vim.health.start("sorcerer")
   if vim.fn.has("nvim-0.10") == 0 then vim.health.error("Neovim 0.10 or newer is needed") else vim.health.ok("Neovim " .. tostring(vim.version())) end
   local cmd = ((require("sorcerer").opts or require("sorcerer").defaults).scry or {}).cmd or { "scry", "lsp" }

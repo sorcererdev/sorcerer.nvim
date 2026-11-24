@@ -152,4 +152,89 @@ describe("sorcerer.signs (scry's margin in code buffers)", function()
     local sign_ns = vim.diagnostic.get_namespace(ns).user_data.sign_ns
     assert.equals(1, #vim.api.nvim_buf_get_extmarks(buf, sign_ns, 0, -1, {}))
   end)
+
+  describe("holes, rule findings and conjured changes", function()
+    local function own(buf)
+      local out = {}
+      for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, signs.marks_ns, 0, -1, { details = true })) do
+        table.insert(out, { row = m[2], col = m[3], text = m[4].sign_text and vim.trim(m[4].sign_text), hl = m[4].sign_hl_group or m[4].hl_group, number = m[4].number_hl_group, end_col = m[4].end_col })
+      end
+      return out
+    end
+    local function d(row, source, code, severity, extra)
+      return vim.tbl_extend("force", { lnum = row, col = 0, end_lnum = row + 1, end_col = 0, severity = severity or S.INFO, source = source, code = code, message = "m" }, extra or {})
+    end
+
+    it("a hole draws the diamond and lights its placeholder", function()
+      local buf = code_buffer()
+      show(buf, { d(1, "spellbook", "hole", S.INFO, { col = 4, end_lnum = 1, end_col = 10 }) })
+      local got = own(buf)
+      assert.equals(2, #got)
+      local glyph = vim.tbl_filter(function(m) return m.text end, got)[1]
+      local span = vim.tbl_filter(function(m) return not m.text end, got)[1]
+      assert.same({ row = 1, col = 0, text = "◇", hl = "SorcererHole" }, { row = glyph.row, col = glyph.col, text = glyph.text, hl = glyph.hl })
+      assert.same({ 1, 4, 10, "SorcererHolePlaceholder" }, { span.row, span.col, span.end_col, span.hl })
+    end)
+
+    it("a whole-line hole mark draws the glyph and no span", function()
+      local buf = code_buffer()
+      show(buf, { d(1, "spellbook", "hole") })
+      assert.equals(1, #own(buf))
+    end)
+
+    it("a rule finding draws the identity glyph in its severity's group", function()
+      local buf = code_buffer()
+      show(buf, { d(0, "spellbook", "r1", S.ERROR), d(1, "spellbook", "r2", S.WARN), d(3, "spellbook", "r3", S.HINT) })
+      local got = own(buf)
+      assert.same({ "≡", "≡", "≡" }, { got[1].text, got[2].text, got[3].text })
+      assert.same({ "SorcererRuleError", "SorcererRuleWarn", "SorcererRuleHint" }, { got[1].hl, got[2].hl, got[3].hl })
+    end)
+
+    it("a conjured change draws the star, its number tinted", function()
+      local buf = code_buffer()
+      show(buf, { d(1, "conjure", "change", S.INFO) })
+      assert.same({ { row = 1, col = 0, text = "✦", hl = "SorcererConjured", number = "SorcererConjured" } }, own(buf))
+    end)
+
+    it("scry's own marks and other sources are untouched", function()
+      local buf = code_buffer()
+      show(buf, { diag(1, "bug"), d(3, "other", "x") })
+      assert.same({}, own(buf))
+      assert.equals(1, #marks(buf))
+    end)
+
+    it("the looks link to the diagnostic groups", function()
+      local function link(name) return vim.api.nvim_get_hl(0, { name = name }).link end
+      assert.equals("Special", link("SorcererHole"))
+      assert.equals("DiagnosticUnderlineHint", link("SorcererHolePlaceholder"))
+      assert.equals("DiagnosticSignError", link("SorcererRuleError"))
+      assert.equals("DiagnosticSignOk", link("SorcererConjured"))
+    end)
+
+    it("Neovim's signs skip them while the look is on, and take them back when it is off", function()
+      local function neovim_rows(buf)
+        local sign_ns = vim.diagnostic.get_namespace(ns).user_data.sign_ns
+        local rows = {}
+        for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, sign_ns, 0, -1, {})) do rows[m[2]] = true end
+        return rows
+      end
+      local buf = code_buffer()
+      vim.diagnostic.config({ signs = true }, ns)
+      show(buf, { d(1, "spellbook", "hole"), d(3, "conjure", "change") })
+      assert.same({}, neovim_rows(buf))
+      signs.setup({}, { spellbook = { signs = false }, conjure = { sign = false } })
+      show(buf, { d(1, "spellbook", "hole"), d(3, "conjure", "change") })
+      assert.same({}, own(buf))
+      assert.is_true(neovim_rows(buf)[1])
+      assert.is_true(neovim_rows(buf)[3])
+    end)
+
+    it("glyphs can be set", function()
+      signs.setup({}, { spellbook = { signs = { hole = "H", rule = "R" } }, conjure = { sign = "C" } })
+      local buf = code_buffer()
+      show(buf, { d(0, "spellbook", "hole"), d(1, "spellbook", "r", S.ERROR), d(3, "conjure", "change") })
+      local got = own(buf)
+      assert.same({ "H", "R", "C" }, { got[1].text, got[2].text, got[3].text })
+    end)
+  end)
 end)
