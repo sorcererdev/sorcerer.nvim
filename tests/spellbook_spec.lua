@@ -380,6 +380,183 @@ describe("sorcerer.spellbook :Spellbook new", function()
   end)
 end)
 
+-- ---- the hole session: holes as snippet placeholders ----
+
+local CMD = "src/cmd.py"
+local CMD_TEST = "src/cmd__test.py"
+local CMD_LINES = {
+  "def handle(cmd):",
+  "    todo_field = 1",
+  "    raise NotImplementedError",
+  '    name = "é" + todo_name',
+}
+
+-- a protocol range on one line, UTF-16 columns
+local function range(line, from, to)
+  return { start = { line = line, character = from }, ["end"] = { line = line, character = to } }
+end
+
+local stops = {
+  { file = CMD, name = "field", kind = "ident", instruction = "its first input", range = range(1, 4, 14) },
+  { file = CMD, name = "handle", kind = "block", instruction = "its first case", range = range(2, 4, 29) },
+  -- after `é` (two bytes, one UTF-16 unit): UTF-16 17..26 is bytes 18..27
+  { file = CMD, name = "name", kind = "ident", instruction = "a name", range = range(3, 17, 26) },
+  { file = CMD_TEST, name = "field", kind = "ident", instruction = "its first input", range = range(0, 0, 10) },
+}
+
+describe("sorcerer.spellbook hole session", function()
+  local root, messages, notify, echoed, echo
+  local holes = require("sorcerer.spellbook_holes")
+
+  before_each(function()
+    stop_all()
+    close_floats()
+    vim.cmd("silent! %bwipeout!")
+    vim.env.FAKE_LSP_LOG = vim.fn.tempname()
+    vim.env.FAKE_LSP_NAME = "spellbook"
+    require("sorcerer.spellbook").show_wait_ms = 50
+    root = project()
+    vim.fn.writefile(CMD_LINES, root .. "/" .. CMD)
+    vim.fn.writefile({ "todo_field" }, root .. "/" .. CMD_TEST)
+    messages, notify = {}, vim.notify
+    vim.notify = function(msg) table.insert(messages, msg) end
+    echoed, echo = {}, holes.echo
+    holes.echo = function(text) table.insert(echoed, text) end
+  end)
+
+  after_each(function()
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do holes.stop(buf) end
+    vim.notify = notify
+    holes.echo = echo
+    vim.env.FAKE_LSP_NAME = nil
+    vim.env.FAKE_LSP_REPLIES = nil
+    close_floats()
+  end)
+
+  -- run the plan float's apply over a canned reply with STOPS; SETUP is the spellbook table
+  local function apply_with(reply_stops, setup)
+    replies({
+      ["spellbook.generators"] = generators,
+      ["spellbook.choices_app"] = { choices = { "bistro" } },
+      ["spellbook.plan"] = plan,
+      ["spellbook.apply"] = {
+        written = { CMD, CMD_TEST }, skipped = {}, holes = plan.holes,
+        first = { file = CMD, line = 2 }, stops = reply_stops,
+      },
+    })
+    sorcerer.setup({ scry = { enabled = false }, spellbook = vim.tbl_extend("force", { enabled = true, cmd = { fake, "lsp" } }, setup or {}) })
+    vim.cmd.edit(root .. "/src/b.py")
+    wait(function() return #clients() == 1 and clients()[1].initialized end)
+    pickers({})
+    vim.cmd("Spellbook new command service=booking command=cancel_table")
+    local buf
+    wait(function() local w, b = float(); buf = b; return w ~= nil end)
+    press(buf, "<CR>")
+  end
+
+  -- run what is waiting in typeahead, staying in the mode it ends in (select or normal)
+  local function flush() vim.api.nvim_feedkeys("", "x!", false) end
+  local function type_keys(keys)
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "mx!", false)
+  end
+  -- the selected text: from the visual start to the cursor (inclusive), one line
+  local function selected()
+    local v, c = vim.fn.getpos("v"), vim.fn.getpos(".")
+    assert.equals(v[2], c[2])
+    local from, to = math.min(v[3], c[3]), math.max(v[3], c[3])
+    return vim.api.nvim_get_current_line():sub(from, to)
+  end
+
+  it("after apply the first placeholder is selected in select mode, with its message", function()
+    apply_with(stops)
+    wait(function() return holes.active(vim.api.nvim_get_current_buf()) end)
+    flush()
+    assert.equals(root .. "/" .. CMD, vim.api.nvim_buf_get_name(0))
+    assert.equals("s", vim.fn.mode())
+    assert.equals("todo_field", selected())
+    assert.equals("hole 1 of 3 · field: its first input · type to replace · <Tab> next", echoed[#echoed])
+  end)
+
+  it("typing replaces the placeholder, <Tab> and <S-Tab> move between holes", function()
+    apply_with(stops)
+    wait(function() return holes.active(vim.api.nvim_get_current_buf()) end)
+    flush()
+    -- typed in one go: a run that ends in insert mode would wait for more keys
+    type_keys("id<Tab>")
+    assert.equals("    id = 1", vim.api.nvim_buf_get_lines(0, 1, 2, false)[1])
+    assert.equals("s", vim.fn.mode())
+    assert.equals("raise NotImplementedError", selected())
+    assert.equals("hole 2 of 3 · handle: its first case · type to replace · <Tab> next", echoed[#echoed])
+    type_keys("<S-Tab>")
+    -- the hole grew with what was typed: the whole of `id` is the hole now
+    assert.equals("id", selected())
+    type_keys("<Tab><Tab>")
+    -- a multibyte line selects the right span
+    assert.equals("todo_name", selected())
+    assert.equals("hole 3 of 3 · name: a name · type to replace · <Tab> done", echoed[#echoed])
+  end)
+
+  it("<Tab> past the last hole ends it, naming the holes of other files", function()
+    apply_with(stops)
+    local buf
+    wait(function() buf = vim.api.nvim_get_current_buf(); return holes.active(buf) end)
+    flush()
+    type_keys("<Tab><Tab><Tab>")
+    assert.is_false(holes.active(buf))
+    assert.equals("n", vim.fn.mode())
+    assert.equals("spellbook: holes done · 1 more in cmd__test.py, marked (]d)", messages[#messages])
+    assert.equals(0, #vim.api.nvim_buf_get_extmarks(buf, holes.ns, 0, -1, {}))
+    -- our buffer-local keys are gone (a global one, like Neovim's own snippet <Tab>, may remain)
+    assert.is_not.equals(1, vim.fn.maparg("<Tab>", "i", false, true).buffer)
+    assert.is_not.equals(1, vim.fn.maparg("<S-Tab>", "s", false, true).buffer)
+  end)
+
+  it("a buffer-local <Tab> you had is back after the end, and no global map changed", function()
+    local global = vim.fn.maparg("<Tab>", "i", false, true) -- Neovim's own (0.11+), or none
+    -- a buffer-local <Tab>, as a filetype plugin would set it
+    local au = vim.api.nvim_create_autocmd("BufReadPost", {
+      pattern = "*cmd.py",
+      callback = function(a) vim.keymap.set("i", "<Tab>", "local-tab", { buffer = a.buf, desc = "mine, local" }) end,
+    })
+    apply_with(stops)
+    local buf
+    wait(function() buf = vim.api.nvim_get_current_buf(); return holes.active(buf) end)
+    vim.api.nvim_del_autocmd(au)
+    flush()
+    assert.equals("spellbook: next hole", vim.fn.maparg("<Tab>", "i", false, true).desc)
+    holes.stop(buf)
+    assert.equals("mine, local", vim.fn.maparg("<Tab>", "i", false, true).desc)
+    vim.keymap.del("i", "<Tab>", { buffer = buf })
+    assert.same(global, vim.fn.maparg("<Tab>", "i", false, true))
+  end)
+
+  it("names the conjure key when conjure is attached", function()
+    assert.equals("hole 1 of 2 · field: x · type to replace · <Tab> next · <leader>mc conjure",
+      holes.message_text(1, 2, { name = "field", instruction = "x" }, { next = "<Tab>" }, "<leader>mc"))
+  end)
+
+  it("hole_keys = false starts no session and keeps the end line", function()
+    apply_with(stops, { hole_keys = false })
+    wait(function() return #messages > 0 end)
+    assert.is_false(holes.active(vim.api.nvim_get_current_buf()))
+    assert.equals("spellbook: wrote 2 files · 1 holes, marked; ]d walks them", messages[#messages])
+  end)
+
+  it("conjure_holes = true starts no session", function()
+    apply_with(stops, { conjure_holes = true })
+    wait(function() return #messages > 0 end)
+    assert.is_false(holes.active(vim.api.nvim_get_current_buf()))
+  end)
+
+  it("an older server (no stops) keeps today's end line", function()
+    apply_with(nil)
+    wait(function() return #messages > 0 end)
+    assert.is_false(holes.active(vim.api.nvim_get_current_buf()))
+    assert.equals("spellbook: wrote 2 files · 1 holes, marked; ]d walks them", messages[#messages])
+  end)
+end)
+
 -- ---- the plan float in colour ----
 
 describe("sorcerer.spellbook_plan", function()

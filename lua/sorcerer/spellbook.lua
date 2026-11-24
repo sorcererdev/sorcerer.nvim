@@ -37,7 +37,8 @@ end
 -- input) or: generators `[{ id, name, summary, inputs = [{ name, type, prompt, optional }] }]`,
 -- choices `{ choices }`, a plan `{ id, generator, files = [{ path, status, text, lines }],
 -- holes = [{ name, kind, instruction, source, places = [{ file, line }] }] }`, and an apply
--- `{ written, skipped, refused, holes, first = { file, line } }`.
+-- `{ written, skipped, refused, holes, first = { file, line }, stops = [{ file, name, kind,
+-- instruction, range }] }` (`stops`: each hole's placeholder, UTF-16 range; absent from an older server).
 
 -- how long to wait for the server's own `window/showDocument` to open the first hole
 M.show_wait_ms = 2000
@@ -161,8 +162,44 @@ local function holes_to_fill(holes)
   return n
 end
 
--- After an apply: the first hole's file open, the end line, and conjure on the first hole when
--- asked. The server asks the editor to show the file; when it has not within the wait, do it.
+-- The hole session keys, or nil when there is to be no session: `hole_keys = false`, or
+-- conjure filling the first hole itself (`conjure_holes`).
+local function session_keys()
+  if not opts or opts.hole_keys == false or opts.conjure_holes then return nil end
+  return vim.tbl_extend("force", { next = "<Tab>", prev = "<S-Tab>" }, opts.hole_keys or {})
+end
+
+-- Start the hole session on the first hole's file ABS (shown by now) over REPLY's stops in that
+-- file; the holes of other files are counted for the end line. False when there is none to run:
+-- no stops (an older server), no keys, or the file is not in a window.
+local function start_holes(reply, abs, conjure)
+  local keys = session_keys()
+  local stops = reply.stops or {}
+  if not keys or #stops == 0 then return false end
+  local mine, others = {}, {}
+  for _, stop in ipairs(stops) do
+    if stop.file == stops[1].file then
+      table.insert(mine, stop)
+    else
+      local name = vim.fs.basename(stop.file)
+      others[name] = (others[name] or 0) + 1
+    end
+  end
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    local name = vim.api.nvim_buf_get_name(buf)
+    if name ~= "" and vim.fs.normalize(name) == abs then
+      vim.api.nvim_set_current_win(win)
+      local conjure_lhs = conjure and require("sorcerer.keys").lhs("conjure") or nil
+      require("sorcerer.spellbook_holes").start(buf, mine, keys, conjure_lhs, others)
+      return true
+    end
+  end
+  return false
+end
+
+-- After an apply: the first hole's file open, its holes as a session of snippet placeholders
+-- (spellbook_holes.lua) or else the end line, and conjure on the first hole when asked. The server asks the editor to show the file; when it has not within the wait, do it.
 local function finish(client, reply)
   local first = reply.first
   local conjure = conjure_for(client)
@@ -201,9 +238,10 @@ local function finish(client, reply)
         pcall(vim.api.nvim_win_set_cursor, 0, { first.line, 0 })
       else
         say(("spellbook: could not open %s; the first hole is at line %d"):format(abs, first.line), vim.log.levels.WARN)
+        return end_line()
       end
     end
-    end_line()
+    if not start_holes(reply, abs, conjure) then end_line() end
   end))
 end
 

@@ -172,11 +172,25 @@ file on disk: save a file with a placeholder replaced and its mark goes. When co
 hole's line already offers **Conjure here**, and the end line says `<leader>mc to conjure the
 first`; with `conjure_holes = true` the plugin runs conjure on the first hole for you.
 
+**Holes work like snippet placeholders.** After the apply you land on the first hole's
+placeholder, selected (select mode): type and it is replaced. `<Tab>` moves to the next hole,
+`<S-Tab>` back; the message line says where you are, `hole 1 of 3 · field: its first input · type
+to replace · <Tab> next · <leader>mc conjure` (the conjure part when conjure is on). A hole grows
+with what you type, so `<S-Tab>` selects your whole answer again. `<Tab>` on the last hole ends
+it (`spellbook: holes done`), and so does closing the buffer. The session walks the holes of the
+file it opened; a hole in another file (the test, say) stays marked, and the end line names it:
+`spellbook: holes done · 1 more in command__test.py, marked (]d)`. The placeholders stay code
+that parses while you walk them. The keys are that buffer's own, in insert and select mode only:
+normal-mode `<Tab>` and your global maps (a completion plugin's `<Tab>`) are never touched, and a
+buffer-local map you had on those keys is put back at the end. No session runs with
+`conjure_holes = true` (conjure fills the first hole) or `hole_keys = false`.
+
 | setting | default | |
 |---|---|---|
 | `spellbook.enabled` | `false` | start `spellbook lsp` for the files you open |
 | `spellbook.cmd` | `{ "spellbook", "lsp" }` | the program, if not on your PATH |
 | `spellbook.conjure_holes` | `false` | conjure the first hole after `:Spellbook new` |
+| `spellbook.hole_keys` | `{ next = "<Tab>", prev = "<S-Tab>" }` | the keys between holes after `:Spellbook new`; `false` = no session |
 
 The project must be trusted (`spellbook trust`) when its own config runs code.
 `:checkhealth sorcerer` checks that `spellbook` is found when it is enabled.
