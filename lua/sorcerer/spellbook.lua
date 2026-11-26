@@ -36,6 +36,22 @@ function M.attach(buf)
   }, { bufnr = buf })
 end
 
+-- A file written for the first time (a new file, which has no client until it is on disk) is
+-- attached only after its write, so Neovim sends no `didSave` for it: send it, so the server's
+-- save work (a hole's mark, a region synced on save) runs on this save and not the next one. A
+-- client still starting is waited for, a few seconds at most.
+-- Example: `:e commands/close_table.rs`, type, `:w` syncs `commands/mod.rs` at once.
+function M.first_save(buf, tries)
+  local client = vim.lsp.get_clients({ name = "spellbook", bufnr = buf })[1]
+  if not client or not vim.api.nvim_buf_is_valid(buf) then return end
+  if not client.initialized then
+    if (tries or 0) < 50 then vim.defer_fn(function() M.first_save(buf, (tries or 0) + 1) end, 100) end
+    return
+  end
+  local params = { textDocument = { uri = vim.uri_from_bufnr(buf) } }
+  if vim.fn.has("nvim-0.11") == 1 then client:notify("textDocument/didSave", params) else client.notify("textDocument/didSave", params) end
+end
+
 -- spellbook shows no progress line, so it has nothing for the status line.
 function M.status()
   return ""
@@ -492,7 +508,11 @@ function M.setup(o)
   local group = vim.api.nvim_create_augroup("sorcerer_spellbook", { clear = true })
   vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile", "BufWritePost", "BufEnter" }, {
     group = group,
-    callback = function(a) M.attach(a.buf) end,
+    callback = function(a)
+      local was_attached = #vim.lsp.get_clients({ name = "spellbook", bufnr = a.buf }) > 0
+      M.attach(a.buf)
+      if a.event == "BufWritePost" and not was_attached then M.first_save(a.buf) end
+    end,
   })
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(buf) then M.attach(buf) end

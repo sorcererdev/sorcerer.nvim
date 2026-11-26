@@ -64,6 +64,30 @@ describe("sorcerer.spellbook", function()
     wait(function() return #clients() == 1 and vim.tbl_count(clients()[1].attached_buffers) == 2 end)
   end)
 
+  it("a new file's first write is attached and sent as a save, so the server syncs on it", function()
+    local root = project()
+    vim.cmd.edit(root .. "/src/a.py")
+    wait(function() return #clients() == 1 and clients()[1].initialized end)
+    vim.cmd.edit(root .. "/src/new.py")
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "x = 2" })
+    vim.cmd("silent write")
+    local uri = vim.uri_from_fname(root .. "/src/new.py")
+    local saves = function()
+      local n = 0
+      for _, line in ipairs(vim.fn.readfile(vim.env.FAKE_LSP_LOG)) do
+        local msg = vim.json.decode(line)
+        if msg.method == "textDocument/didSave" and msg.params.textDocument.uri == uri then n = n + 1 end
+      end
+      return n
+    end
+    wait(function() return saves() == 1 end)
+    -- a second write is Neovim's own didSave, once
+    vim.cmd("silent write")
+    wait(function() return saves() == 2 end)
+    vim.wait(200)
+    assert.equals(2, saves())
+  end)
+
   it("a missing spellbook warns once, naming the setting", function()
     stop_all()
     local warnings = {}
