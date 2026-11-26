@@ -11,7 +11,10 @@
 # "rule": "r1" (optional), "stale": true (optional), "id": "f1", "evidence": "..." (optional)};
 # they are published shaped as scry's: the whole line, severity 1 for bug else 2, source scry,
 # code the issue type (type-stale when stale), data the finding id, relatedInformation only
-# when the client's initialize advertised it. When the client's initializationOptions say
+# when the client's initialize advertised it. A workspace/executeCommand of spellbook.apply, when
+# $FAKE_LSP_REPLIES/workspace_applyEdit.json exists, first sends the server request
+# workspace/applyEdit with that file's params, waits for the editor's answer (logged like any
+# message) and only then answers the command, as the real spellbook does. When the client's initializationOptions say
 # drawsWorking, a save also sends sorcerer/working with the file's first line before the
 # progress begins, and an empty list 1.5 s after it, before the progress ends.
 import json
@@ -149,4 +152,10 @@ while True:
     elif method == "textDocument/didSave":
         on_save(msg["params"]["textDocument"]["uri"])
     elif "id" in msg:
+        if method == "workspace/executeCommand" and msg["params"]["command"] == "spellbook.apply" and canned("workspace_applyEdit.json"):
+            send({"jsonrpc": "2.0", "id": "srv-edit", "method": "workspace/applyEdit", "params": canned("workspace_applyEdit.json")})
+            while True:  # the apply waits for the editor's answer
+                answer = read()
+                if answer.get("id") == "srv-edit" and "method" not in answer:
+                    break
         send({"jsonrpc": "2.0", "id": msg["id"], "result": reply_for(method, msg["params"])})

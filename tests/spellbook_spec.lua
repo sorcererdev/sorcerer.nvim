@@ -677,3 +677,185 @@ describe("sorcerer.spellbook check", function()
     assert.truthy(messages[#messages]:find("rules.toml: line 3", 1, true))
   end)
 end)
+
+-- ---- :Spellbook fix ----
+
+local FIXED = "src/a.py"
+local fix_generators = {
+  {
+    id = "use-port", name = "Use a port the service has", summary = "Use a port",
+    inputs = {
+      { name = "app", type = "enum", prompt = "The app", optional = false },
+      { name = "unit", type = "ident", prompt = "The unit", optional = false },
+      { name = "port", type = "enum", prompt = "The port it takes", optional = false },
+      { name = "note", type = "text", prompt = "A note", optional = true },
+    },
+  },
+}
+local fix_plan = {
+  id = "fx12", generator = "use-port", inputs = {},
+  files = {
+    {
+      path = FIXED, status = "changed", text = "def f(x):\n    ported\n", lines = 2, added = 1, removed = 1,
+      hunks = { { header = "@@ -2,1 +2,1 @@", from = 2, to = 2, lines = { "-    pass", "+    ported" } } },
+    },
+    { path = "src/p.py", status = "new", text = "x = 1\n", lines = 1 },
+  },
+  holes = {},
+  fix = { rule = "commands-use-ports", file = FIXED, line = 1, fingerprint = "ff", index = 1, label = "Use a port the service has" },
+}
+local fix_argument = {
+  generator = "use-port", inputs = { app = "bistro", unit = "f" }, missing = { "port" },
+  fix = { file = FIXED, line = 1, rule = "commands-use-ports", index = 1, label = "Use a port the service has", version = vim.NIL },
+}
+
+describe("sorcerer.spellbook :Spellbook fix", function()
+  local root, log, messages, notify
+
+  before_each(function()
+    stop_all()
+    close_floats()
+    vim.cmd("silent! %bwipeout!")
+    log = vim.fn.tempname()
+    vim.env.FAKE_LSP_LOG = log
+    vim.env.FAKE_LSP_NAME = "spellbook"
+    require("sorcerer.spellbook").show_wait_ms = 50
+    root = project()
+    messages, notify = {}, vim.notify
+    vim.notify = function(msg) table.insert(messages, msg) end
+  end)
+
+  after_each(function()
+    vim.notify = notify
+    vim.env.FAKE_LSP_NAME = nil
+    vim.env.FAKE_LSP_REPLIES = nil
+    close_floats()
+  end)
+
+  -- The fake's replies: the commands, the code actions of the line, and the edit the apply asks.
+  local function start(extra)
+    replies(vim.tbl_extend("force", {
+      ["spellbook.generators"] = fix_generators,
+      ["spellbook.choices_port"] = { choices = { "booking_repository", "table_repository" } },
+      ["spellbook.plan"] = fix_plan,
+      ["spellbook.apply"] = { changed = { FIXED }, written = { "src/p.py" }, skipped = {}, refused = vim.NIL, holes = {}, first = vim.NIL, stops = {} },
+    }, extra or {}))
+    local dir = vim.env.FAKE_LSP_REPLIES
+    vim.fn.writefile({ vim.json.encode({
+      { title = "spellbook: Use a port the service has", kind = "quickfix", isPreferred = true,
+        command = { title = "x", command = "spellbook.fix", arguments = { fix_argument } } },
+      { title = "spellbook: Add a port and use it", kind = "quickfix",
+        command = { title = "y", command = "spellbook.fix", arguments = { fix_argument } } },
+    }) }, dir .. "/textDocument_codeAction.json")
+    vim.fn.writefile({ vim.json.encode({
+      label = "spellbook: Use a port the service has",
+      edit = { documentChanges = { {
+        textDocument = { uri = vim.uri_from_fname(root .. "/" .. FIXED), version = vim.NIL },
+        edits = { { range = { start = { line = 1, character = 0 }, ["end"] = { line = 1, character = 8 } }, newText = "    ported" } },
+      } } },
+    }) }, dir .. "/workspace_applyEdit.json")
+    sorcerer.setup({ scry = { enabled = false }, spellbook = { enabled = true, cmd = { fake, "lsp" } } })
+    vim.cmd.edit(root .. "/" .. FIXED)
+    wait(function() return #clients() == 1 and clients()[1].initialized end)
+    wait(function() return vim.tbl_contains(vim.lsp.get_clients({ bufnr = 0 }), clients()[1]) end)
+  end
+
+  local function plan_float()
+    local buf
+    wait(function() local w, b = float(); buf = b; return w ~= nil end)
+    return buf
+  end
+
+  it("<leader>mf runs the first spellbook fix on the line, asking only what is missing", function()
+    start()
+    local asked = pickers({ 2 })
+    vim.fn.maparg("<leader>mf", "n", false, true).callback()
+    local buf = plan_float()
+    assert.equals(1, #asked.select)
+    assert.equals("The port it takes", asked.select[1].prompt)
+    assert.equals(0, #asked.input)
+    local planned = logged(log, "spellbook.plan")
+    assert.equals(1, #planned)
+    assert.same({ app = "bistro", unit = "f", port = "table_repository" }, planned[1][2])
+    -- the finding and the buffer's version go with it; the label does not
+    local fix = planned[1][3]
+    assert.same({ FIXED, 1, "commands-use-ports", 1 }, { fix.file, fix.line, fix.rule, fix.index })
+    assert.equals(vim.lsp.util.buf_versions[vim.api.nvim_get_current_buf()] or 0, fix.version)
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    assert.equals("~ src/a.py (+1 −1)", lines[1])
+    assert.equals("+ src/p.py (1 lines)", lines[2])
+  end)
+
+  it("the plan float shows each changed file's hunks, + lines and - lines coloured", function()
+    start()
+    pickers({ 1 })
+    vim.fn.maparg("<leader>mf", "n", false, true).callback()
+    local buf = plan_float()
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    local at
+    for i, l in ipairs(lines) do if l == "── src/a.py ──" then at = i end end
+    assert.is_truthy(at)
+    assert.same({ "@@ -2,1 +2,1 @@", "-    pass", "+    ported" }, { lines[at + 1], lines[at + 2], lines[at + 3] })
+    local groups = {}
+    for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, { details = true })) do
+      if m[4].line_hl_group then groups[m[2] + 1] = m[4].line_hl_group end
+    end
+    assert.equals("DiffDelete", groups[at + 2])
+    assert.equals("DiffAdd", groups[at + 3])
+    assert.is_nil(groups[at + 1])
+    -- the title names the rule, the fix and what the finding gave
+    local title = vim.api.nvim_win_get_config((float())).title
+    local text = type(title) == "table" and title[1][1] or title
+    assert.truthy(text:find("fix commands-use-ports · Use a port the service has · 1 file changed · 1 new · app bistro, unit f (from the finding)", 1, true))
+  end)
+
+  it("<CR> applies: the server's applyEdit lands, u takes it back, the end line says what changed", function()
+    start()
+    pickers({ 1 })
+    local buf = vim.api.nvim_get_current_buf()
+    vim.fn.maparg("<leader>mf", "n", false, true).callback()
+    press(plan_float(), "<CR>")
+    wait(function() return #messages > 0 end)
+    assert.same({ "def f(x):", "    ported", "" }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+    assert.is_true(vim.bo[buf].modified)
+    assert.equals("spellbook: fixed commands-use-ports in a.py · changed 1 file · wrote 1 file", messages[#messages])
+    -- the editor answered the server's edit, then the apply was answered
+    local answered = false
+    for _, line in ipairs(vim.fn.readfile(log)) do
+      local msg = vim.json.decode(line)
+      if msg.id == "srv-edit" and msg.method == nil then answered = msg.result.applied end
+    end
+    assert.is_true(answered)
+    vim.api.nvim_buf_call(buf, function() vim.cmd("silent undo") end)
+    assert.same({ "def f(x):", "    pass", "" }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+  end)
+
+  it("a buffer with unsaved changes is refused, by name, and nothing is planned", function()
+    start()
+    vim.api.nvim_buf_set_lines(0, 0, 1, false, { "def g(x):" })
+    pickers({})
+    vim.fn.maparg("<leader>mf", "n", false, true).callback()
+    wait(function() return #messages > 0 end)
+    assert.equals("spellbook: save a.py first; a fix is planned against the file on disk", messages[1])
+    vim.wait(100)
+    assert.equals(0, #logged(log, "spellbook.plan"))
+  end)
+
+  it("a stop of the apply (the file changed since the plan) is said", function()
+    start({ ["spellbook.apply"] = { stop = "a.py changed since the plan; nothing was applied: fix again" } })
+    pickers({ 1 })
+    vim.fn.maparg("<leader>mf", "n", false, true).callback()
+    press(plan_float(), "<CR>")
+    wait(function() return #messages > 0 end)
+    assert.equals("a.py changed since the plan; nothing was applied: fix again", messages[1])
+  end)
+
+  it(":Spellbook fix port=x answers the input, so nothing is asked", function()
+    start()
+    local asked = pickers({})
+    vim.cmd("Spellbook fix port=booking_repository")
+    plan_float()
+    assert.equals(0, #asked.select)
+    assert.equals("booking_repository", logged(log, "spellbook.plan")[1][2].port)
+  end)
+end)

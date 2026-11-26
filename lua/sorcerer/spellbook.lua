@@ -22,7 +22,13 @@ function M.attach(buf)
   local root = M.root(buf)
   if not root then return end
   if not require("sorcerer.program").runnable("spellbook", opts.cmd) then return end
-  vim.lsp.start({ name = "spellbook", cmd = opts.cmd, root_dir = root }, { bufnr = buf })
+  vim.lsp.start({
+    name = "spellbook",
+    cmd = opts.cmd,
+    root_dir = root,
+    -- the command of the server's quick fixes: the editor runs it, not the server
+    commands = { ["spellbook.fix"] = function(cmd, ctx) M.fix(cmd.arguments and cmd.arguments[1], ctx) end },
+  }, { bufnr = buf })
 end
 
 -- spellbook shows no progress line, so it has nothing for the status line.
@@ -106,8 +112,10 @@ local function ask_value(input, choices, done)
   end
 end
 
--- Resolve each of GENERATOR's inputs in order, the given ones kept; DONE(inputs).
-local function ask_inputs(client, generator, given, done)
+-- Resolve each of GENERATOR's inputs in order, the given ones kept; DONE(inputs). With ONLY (a
+-- list of names), the inputs it does not name are left alone: a fix asks what its finding does
+-- not settle.
+local function ask_inputs(client, generator, given, done, only)
   local values = vim.deepcopy(given)
   local function step(i)
     local input = generator.inputs[i]
@@ -118,6 +126,7 @@ local function ask_inputs(client, generator, given, done)
       step(i + 1)
     end
     if values[input.name] then return step(i + 1) end
+    if only and not vim.tbl_contains(only, input.name) then return step(i + 1) end
     if input.type ~= "enum" then return ask_value(input, nil, take) end
     command(client, "spellbook.choices", { generator.id, values, input.name }, function(reply)
       if reply.stop then return say(reply.stop, vim.log.levels.WARN) end
@@ -128,9 +137,10 @@ local function ask_inputs(client, generator, given, done)
   step(1)
 end
 
--- The plan for GENERATOR and VALUES; a stop that names an input asks that input once more.
-local function make_plan(client, generator, values, retried, done)
-  command(client, "spellbook.plan", { generator.id, values }, function(reply)
+-- The plan for GENERATOR and VALUES (and the finding FIX answers, when there is one); a stop that
+-- names an input asks that input once more.
+local function make_plan(client, generator, values, retried, done, fix)
+  command(client, "spellbook.plan", fix and { generator.id, values, fix } or { generator.id, values }, function(reply)
     if not reply.stop then return done(reply) end
     if reply.input and not retried then
       local input = vim.tbl_filter(function(i) return i.name == reply.input end, generator.inputs)[1]
@@ -139,7 +149,7 @@ local function make_plan(client, generator, values, retried, done)
         return ask_value(input, #(reply.choices or {}) > 0 and reply.choices or nil, function(value)
           if value == nil or value == "" then return end
           values[input.name] = value
-          make_plan(client, generator, values, true, done)
+          make_plan(client, generator, values, true, done, fix)
         end)
       end
     end
@@ -200,12 +210,13 @@ end
 
 -- After an apply: the first hole's file open, its holes as a session of snippet placeholders
 -- (spellbook_holes.lua) or else the end line, and conjure on the first hole when asked. The server asks the editor to show the file; when it has not within the wait, do it.
-local function finish(client, reply)
+-- FIXED ({ rule, file }) is set after a fix: the end line then says what it changed.
+local function finish(client, reply, fixed)
   local first = reply.first
   local conjure = conjure_for(client)
   local function end_line()
     local n = holes_to_fill(reply.holes)
-    local text = ("spellbook: wrote %d %s"):format(#reply.written, #reply.written == 1 and "file" or "files")
+    local text = M.end_text(reply, fixed)
     if n > 0 then
       local key = require("sorcerer.keys").lhs("conjure")
       text = text .. (conjure and (" · %d holes · %s to conjure the first"):format(n, key or "Conjure here (a code action)")
@@ -245,13 +256,28 @@ local function finish(client, reply)
   end))
 end
 
-local function apply(client, plan)
+-- The first part of the end line: what was written, or after a fix (FIXED = { rule, file }) what
+-- it fixed, changed and wrote.
+-- Example: `spellbook: wrote 2 files`;
+-- `spellbook: fixed commands-use-ports in close_table.py · changed 2 files · wrote 4 files`.
+function M.end_text(reply, fixed)
+  local function files(n) return ("%d %s"):format(n, n == 1 and "file" or "files") end
+  if not fixed then return ("spellbook: wrote %s"):format(files(#reply.written)) end
+  local text = ("spellbook: fixed %s in %s · changed %s"):format(fixed.rule, vim.fs.basename(fixed.file), files(#(reply.changed or {})))
+  if #reply.written > 0 then text = text .. " · wrote " .. files(#reply.written) end
+  return text
+end
+
+-- Apply PLAN. A plan with changed files makes the server send `workspace/applyEdit` before it
+-- answers; Neovim's own handler for it lands the edit (one undo step per buffer, the buffers left
+-- modified), so nothing here waits on it or replaces it. FIXED: see finish.
+local function apply(client, plan, fixed)
   command(client, "spellbook.apply", { plan.id }, function(reply)
     if reply.stop then return say(reply.stop, vim.log.levels.WARN) end
     if reply.refused and reply.refused ~= vim.NIL then
       say(("spellbook: %s was not written: %s"):format(reply.refused.path, reply.refused.why), vim.log.levels.WARN)
     end
-    finish(client, reply)
+    finish(client, reply, fixed)
   end)
 end
 
@@ -287,6 +313,76 @@ function M.new(args)
       if generator then with(generator) end
     end)
   end)
+end
+
+-- ---- :Spellbook fix ----
+
+-- the `input=value` words of a `:Spellbook fix` line, taken by the next fix that runs
+local extra_inputs = {}
+
+-- The sentence for a buffer with unsaved changes.
+-- Example: `spellbook: save close_table.py first; a fix is planned against the file on disk`.
+function M.dirty_text(file)
+  return ("spellbook: save %s first; a fix is planned against the file on disk"):format(vim.fs.basename(file))
+end
+
+-- Run the fix a quick fix carries: ARG is the code action's command argument `{ generator,
+-- inputs, missing, fix }` and CTX the buffer it was asked in. The buffer must be saved (the plan
+-- is made on the file on disk); then it is the New chain from step 2: the generator is the
+-- fix's, the inputs the finding settled are kept, only `missing` is asked, and the plan gets the
+-- finding with the buffer's version. Applying lands the changed files through `applyEdit`.
+function M.fix(arg, ctx)
+  local given = extra_inputs
+  extra_inputs = {}
+  local fix = type(arg) == "table" and arg.fix
+  if not fix or not arg.generator then
+    return say("spellbook: this fix has no shape this plugin knows; update sorcerer.nvim", vim.log.levels.WARN)
+  end
+  local buf = ctx and ctx.bufnr or vim.api.nvim_get_current_buf()
+  if vim.bo[buf].modified then return say(M.dirty_text(fix.file), vim.log.levels.WARN) end
+  local client = (ctx and ctx.client_id and vim.lsp.get_client_by_id(ctx.client_id)) or client_here()
+  if not client then
+    return say("spellbook: open a file in the project first", vim.log.levels.WARN)
+  end
+  local request_fix = {
+    file = fix.file, line = fix.line, rule = fix.rule, index = fix.index,
+    version = vim.lsp.util.buf_versions[buf] or 0,
+  }
+  command(client, "spellbook.generators", {}, function(generators)
+    local generator = vim.tbl_filter(function(g) return g.id == arg.generator end, generators)[1]
+    if not generator then return say(("spellbook: no generator named %s"):format(arg.generator), vim.log.levels.WARN) end
+    local inputs = vim.tbl_extend("force", arg.inputs or {}, given)
+    ask_inputs(client, generator, inputs, function(values)
+      make_plan(client, generator, values, false, function(plan)
+        require("sorcerer.spellbook_plan").show(plan, function() apply(client, plan, { rule = fix.rule, file = fix.file }) end, arg.inputs)
+      end, request_fix)
+    end, arg.missing)
+  end)
+end
+
+-- True for the quick fix that runs `spellbook.fix`.
+function M.is_fix(action)
+  return type(action.command) == "table" and action.command.command == "spellbook.fix"
+end
+
+-- Run the first spellbook fix offered on the cursor's line; GIVEN (`input=value` words) answers
+-- inputs the finding does not settle.
+function M.fix_here(given)
+  extra_inputs = given or {}
+  local taken = false
+  vim.lsp.buf.code_action({
+    apply = true,
+    context = { only = { "quickfix" } },
+    filter = function(action)
+      if taken or not M.is_fix(action) then return false end
+      taken = true
+      return true
+    end,
+  })
+  -- Neovim says `No code actions available` when the line has none; the words wait no longer
+  vim.defer_fn(function()
+    if not taken then extra_inputs = {} end
+  end, 1000)
 end
 
 -- ---- :Spellbook check ----
@@ -336,12 +432,20 @@ function M.setup(o)
     local sub = table.remove(c.fargs, 1)
     if sub == "new" then return M.new(c.fargs) end
     if sub == "check" then return M.check() end
-    say("spellbook: use `:Spellbook new [generator] [input=value…]` or `:Spellbook check`", vim.log.levels.WARN)
+    if sub == "fix" then
+      local given = {}
+      for _, arg in ipairs(c.fargs) do
+        local name, value = arg:match("^([%w_%-]+)=(.*)$")
+        if name then given[name] = value end
+      end
+      return M.fix_here(given)
+    end
+    say("spellbook: use `:Spellbook new [generator] [input=value…]`, `:Spellbook fix [input=value…]` or `:Spellbook check`", vim.log.levels.WARN)
   end, {
     nargs = "*",
     complete = function(lead, line)
       if not line:match("^%s*Spellbook%s+%S*$") then return {} end
-      return vim.tbl_filter(function(s) return vim.startswith(s, lead) end, { "new", "check" })
+      return vim.tbl_filter(function(s) return vim.startswith(s, lead) end, { "new", "fix", "check" })
     end,
     desc = "spellbook: write a generator's files",
   })

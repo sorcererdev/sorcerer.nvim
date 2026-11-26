@@ -34,7 +34,7 @@ M.defaults = {
   },
   -- sorcerer's keys, `<prefix><key>`; each needs its tool on. Set `keys = false`, or one key to
   -- `false`, to bind nothing (or that one). A lhs you already mapped is skipped.
-  keys = { prefix = "<leader>m", new = "n", conjure = "c", undo = "u", try_harder = "t", why = "w", check = "k" },
+  keys = { prefix = "<leader>m", new = "n", fix = "f", conjure = "c", undo = "u", try_harder = "t", why = "w", check = "k" },
 }
 
 function M.setup(opts)
