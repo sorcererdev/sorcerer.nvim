@@ -89,6 +89,7 @@ sorcerer binds its keys under one prefix, `<leader>m`, for the tools you turned 
 | key | does | needs |
 |---|---|---|
 | `<leader>mn` | `:Spellbook new`, a generator's files | spellbook |
+| `<leader>mf` | the finding's fix on the cursor's line (the first `spellbook:` quick fix) | spellbook |
 | `<leader>mc` | conjure here (normal and visual) | conjure |
 | `<leader>mu` | undo the conjured change | conjure |
 | `<leader>mt` | try the change again, harder | conjure |
@@ -171,6 +172,18 @@ every hole (an Information diagnostic, source `spellbook`; `]d` walks them). The
 file on disk: save a file with a placeholder replaced and its mark goes. When conjure is on, a
 hole's line already offers **Conjure here**, and the end line says `<leader>mc to conjure the
 first`; with `conjure_holes = true` the plugin runs conjure on the first hole for you.
+
+**Fixes.** A rule can name the generator that repairs its finding. On a finding's line,
+`vim.lsp.buf.code_action()` lists `spellbook: Use a port the service has` first (the preferred one)
+and the others after; `<leader>mf` (or `:Spellbook fix [input=value…]`) runs the first without the
+menu. Save the file first (`spellbook: save close_table.py first; a fix is planned against the
+file on disk`). It asks only the inputs the finding does not settle, then shows the plan in the
+float: a changed file is `~ path (+3 −1)` with its hunks below, `+` lines in `DiffAdd` and `-` lines
+in `DiffDelete`; a new file is `+ path` as in `new`. `<CR>` applies: the server's own
+`workspace/applyEdit` lands through Neovim's handler, so `u` in each buffer takes it back (the
+changed buffers are left modified; `:wa` saves them), and the new files are written. The end line
+says `spellbook: fixed commands-use-ports in close_table.py · changed 2 files · wrote 4 files`. If
+the file changed since the plan, nothing is applied and you are told.
 
 **Holes work like snippet placeholders.** After the apply you land on the first hole's
 placeholder, selected (select mode): type and it is replaced. `<Tab>` moves to the next hole,
