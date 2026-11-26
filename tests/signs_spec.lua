@@ -113,6 +113,13 @@ describe("sorcerer.signs (scry's margin in code buffers)", function()
     assert.equals(1, #texts(buf))
   end)
 
+  it("a finding on a row the buffer no longer has raises nothing", function()
+    local buf = code_buffer()
+    vim.diagnostic.set(ns, buf, { diag(4, "bug") })
+    vim.api.nvim_buf_set_lines(buf, 1, -1, false, {})
+    assert.has_no.errors(function() signs.place_signs(buf) end)
+  end)
+
   it("two findings on a row draw one sign", function()
     local buf = code_buffer()
     show(buf, { diag(1, "bug"), diag(1, "convention") })
@@ -174,6 +181,23 @@ describe("sorcerer.signs (scry's margin in code buffers)", function()
       local span = vim.tbl_filter(function(m) return not m.text end, got)[1]
       assert.same({ row = 1, col = 0, text = "◇", hl = "SorcererHole" }, { row = glyph.row, col = glyph.col, text = glyph.text, hl = glyph.hl })
       assert.same({ 1, 4, 10, "SorcererHolePlaceholder" }, { span.row, span.col, span.end_col, span.hl })
+    end)
+
+    -- A diagnostic does not move with edits: after a formatter or a workspace edit it can name
+    -- columns or rows the buffer no longer has, until its server publishes again.
+    it("a hole whose span no longer fits its line draws the glyph and no span", function()
+      local buf = code_buffer()
+      show(buf, { d(4, "spellbook", "hole", S.INFO, { col = 48, end_lnum = 4, end_col = 58 }) })
+      local got = own(buf)
+      assert.equals(1, #got)
+      assert.same({ 4, "◇" }, { got[1].row, got[1].text })
+    end)
+
+    it("a mark on a row the buffer no longer has draws nothing and raises nothing", function()
+      local buf = code_buffer()
+      vim.diagnostic.set(ns, buf, { d(2, "spellbook", "hole", S.INFO, { col = 4, end_lnum = 2, end_col = 10 }), d(3, "spellbook", "commands-use-ports", S.ERROR) })
+      vim.api.nvim_buf_set_lines(buf, 1, -1, false, {})
+      assert.has_no.errors(function() signs.place_signs(buf) end)
     end)
 
     it("a whole-line hole mark draws the glyph and no span", function()

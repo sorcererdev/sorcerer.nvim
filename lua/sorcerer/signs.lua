@@ -82,11 +82,21 @@ local severity_groups = {
   [vim.diagnostic.severity.HINT] = "SorcererRuleHint",
 }
 
+-- Whether row ROW of buffer BUF still holds END_COL columns (END_COL nil: whether the row is
+-- there at all). A diagnostic does not move with edits: after a formatter or a workspace edit it
+-- can name a row or a column the buffer no longer has, until its server publishes again.
+-- Example: on a 27-column line, fits(buf, row, 58) is false and fits(buf, row) is true.
+local function fits(buf, row, end_col)
+  if row >= vim.api.nvim_buf_line_count(buf) then return false end
+  if end_col == nil then return true end
+  return end_col <= #vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]
+end
+
 -- Draw the hole, rule and conjured marks of buffer BUF.
 local function place_marks(buf)
   for _, d in ipairs(vim.diagnostic.get(buf)) do
     local look = look_of(d)
-    local glyph = look and M.looks[look]
+    local glyph = look and fits(buf, d.lnum) and M.looks[look]
     if glyph then
       local mark
       if look == "hole" then
@@ -94,7 +104,7 @@ local function place_marks(buf)
         -- the placeholder itself, when the server gave its span (a whole-line range spans lines)
         if d.end_lnum == nil or d.end_lnum == d.lnum then
           local end_col = d.end_col
-          if end_col and end_col > d.col then
+          if end_col and end_col > d.col and fits(buf, d.lnum, end_col) then
             vim.api.nvim_buf_set_extmark(buf, M.marks_ns, d.lnum, d.col, { end_row = d.lnum, end_col = end_col, hl_group = "SorcererHolePlaceholder", priority = 15 })
           end
         end
@@ -118,7 +128,7 @@ function M.place_signs(buf)
   -- one finding a row: a bug before any other type
   local rows, order = {}, {}
   for _, d in ipairs(vim.diagnostic.get(buf)) do
-    if d.source == "scry" then
+    if d.source == "scry" and fits(buf, d.lnum) then
       local kind, stale = tostring(d.code or ""):gsub("%-stale$", "")
       local had = rows[d.lnum]
       if not had then table.insert(order, d.lnum) end
