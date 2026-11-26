@@ -23,7 +23,7 @@ local function stop_all()
 end
 
 local function unmap_all()
-  for _, key in ipairs({ "n", "f", "c", "u", "t", "w", "k", "x" }) do
+  for _, key in ipairs({ "n", "f", "c", "u", "t", "w", "k", "s", "x" }) do
     for _, mode in ipairs({ "n", "v" }) do pcall(vim.keymap.del, mode, "<leader>m" .. key) end
   end
 end
@@ -42,12 +42,13 @@ describe("sorcerer.keys", function()
     unmap_all()
   end)
 
-  it("binds seven maps under <leader>m when both tools are on", function()
+  it("binds eight maps under <leader>m when both tools are on", function()
     sorcerer.setup(both)
-    for _, key in ipairs({ "n", "f", "c", "u", "t", "w", "k" }) do assert.is_true(bound("<leader>m" .. key), key) end
+    for _, key in ipairs({ "n", "f", "c", "u", "t", "w", "k", "s" }) do assert.is_true(bound("<leader>m" .. key), key) end
     assert.is_true(bound("<leader>mc", "v"))
     assert.equals("<leader>mc", keys.lhs("conjure"))
-    assert.equals(7, #keys.bound())
+    assert.equals("<leader>ms", keys.lhs("sync"))
+    assert.equals(8, #keys.bound())
   end)
 
   it("binds only the tools that are on", function()

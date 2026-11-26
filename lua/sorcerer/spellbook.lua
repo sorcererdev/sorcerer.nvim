@@ -8,6 +8,11 @@ local M = {}
 
 local opts = nil
 
+-- the generator name of a sync of the owned regions (`:Spellbook sync`, a region's quick fix)
+local SYNC = "sync"
+-- defined below, with `:Spellbook sync`
+local planned_sync
+
 -- The project root of buffer BUF, or nil.
 function M.root(buf)
   return vim.fs.root(buf, ".sorcerer") or vim.fs.root(buf, ".git")
@@ -29,6 +34,22 @@ function M.attach(buf)
     -- the command of the server's quick fixes: the editor runs it, not the server
     commands = { ["spellbook.fix"] = function(cmd, ctx) M.fix(cmd.arguments and cmd.arguments[1], ctx) end },
   }, { bufnr = buf })
+end
+
+-- A file written for the first time (a new file, which has no client until it is on disk) is
+-- attached only after its write, so Neovim sends no `didSave` for it: send it, so the server's
+-- save work (a hole's mark, a region synced on save) runs on this save and not the next one. A
+-- client still starting is waited for, a few seconds at most.
+-- Example: `:e commands/close_table.rs`, type, `:w` syncs `commands/mod.rs` at once.
+function M.first_save(buf, tries)
+  local client = vim.lsp.get_clients({ name = "spellbook", bufnr = buf })[1]
+  if not client or not vim.api.nvim_buf_is_valid(buf) then return end
+  if not client.initialized then
+    if (tries or 0) < 50 then vim.defer_fn(function() M.first_save(buf, (tries or 0) + 1) end, 100) end
+    return
+  end
+  local params = { textDocument = { uri = vim.uri_from_bufnr(buf) } }
+  if vim.fn.has("nvim-0.11") == 1 then client:notify("textDocument/didSave", params) else client.notify("textDocument/didSave", params) end
 end
 
 -- spellbook shows no progress line, so it has nothing for the status line.
@@ -257,11 +278,12 @@ local function finish(client, reply, fixed)
 end
 
 -- The first part of the end line: what was written, or after a fix (FIXED = { rule, file }) what
--- it fixed, changed and wrote.
--- Example: `spellbook: wrote 2 files`;
+-- it fixed, changed and wrote; a sync (FIXED.sync) what it synced.
+-- Example: `spellbook: wrote 2 files`; `spellbook: synced 1 file`;
 -- `spellbook: fixed commands-use-ports in close_table.py · changed 2 files · wrote 4 files`.
 function M.end_text(reply, fixed)
   local function files(n) return ("%d %s"):format(n, n == 1 and "file" or "files") end
+  if fixed and fixed.sync then return ("spellbook: synced %s"):format(files(#(reply.changed or {}))) end
   if not fixed then return ("spellbook: wrote %s"):format(files(#reply.written)) end
   local text = ("spellbook: fixed %s in %s · changed %s"):format(fixed.rule, vim.fs.basename(fixed.file), files(#(reply.changed or {})))
   if #reply.written > 0 then text = text .. " · wrote " .. files(#reply.written) end
@@ -344,6 +366,7 @@ function M.fix(arg, ctx)
   if not client then
     return say("spellbook: open a file in the project first", vim.log.levels.WARN)
   end
+  if arg.generator == SYNC then return planned_sync(client, arg.inputs or {}) end
   local request_fix = {
     file = fix.file, line = fix.line, rule = fix.rule, index = fix.index,
     version = vim.lsp.util.buf_versions[buf] or 0,
@@ -358,6 +381,37 @@ function M.fix(arg, ctx)
       end, request_fix)
     end, arg.missing)
   end)
+end
+
+-- ---- :Spellbook sync ----
+
+-- The plan of a sync, shown, then applied: the New chain entered at the plan with the generator
+-- `sync`, which the server knows by name (nothing is asked). Nothing to do is said instead, with
+-- the plan's notes (a region not set up). INPUTS: a region's quick fix gives its region and file.
+-- A changed region file with unsaved changes in a buffer is refused, by name: the edit is made
+-- against the file on disk.
+planned_sync = function(client, inputs)
+  command(client, "spellbook.plan", { SYNC, inputs }, function(plan)
+    if plan.stop then return say(plan.stop, vim.log.levels.WARN) end
+    if #(plan.files or {}) == 0 then
+      return say(table.concat(vim.list_extend({ "spellbook: regions up to date" }, plan.notes or {}), " · "))
+    end
+    for _, file in ipairs(plan.files) do
+      local buf = vim.fn.bufnr(vim.fs.joinpath(client.config.root_dir, file.path))
+      if buf ~= -1 and vim.bo[buf].modified then return say(M.dirty_text(file.path), vim.log.levels.WARN) end
+    end
+    require("sorcerer.spellbook_plan").show(plan, function() apply(client, plan, { sync = true }) end)
+  end)
+end
+
+-- `:Spellbook sync`: every owned region refreshed, the plan shown (each region file's hunks),
+-- <CR> lands it through the editor.
+function M.sync()
+  local client = client_here()
+  if not client then
+    return say("spellbook: open a file in the project first (and check `spellbook.enabled` and that the spellbook binary is installed)", vim.log.levels.WARN)
+  end
+  planned_sync(client, {})
 end
 
 -- True for the quick fix that runs `spellbook.fix`.
@@ -432,6 +486,7 @@ function M.setup(o)
     local sub = table.remove(c.fargs, 1)
     if sub == "new" then return M.new(c.fargs) end
     if sub == "check" then return M.check() end
+    if sub == "sync" then return M.sync() end
     if sub == "fix" then
       local given = {}
       for _, arg in ipairs(c.fargs) do
@@ -440,12 +495,12 @@ function M.setup(o)
       end
       return M.fix_here(given)
     end
-    say("spellbook: use `:Spellbook new [generator] [input=value…]`, `:Spellbook fix [input=value…]` or `:Spellbook check`", vim.log.levels.WARN)
+    say("spellbook: use `:Spellbook new [generator] [input=value…]`, `:Spellbook fix [input=value…]`, `:Spellbook sync` or `:Spellbook check`", vim.log.levels.WARN)
   end, {
     nargs = "*",
     complete = function(lead, line)
       if not line:match("^%s*Spellbook%s+%S*$") then return {} end
-      return vim.tbl_filter(function(s) return vim.startswith(s, lead) end, { "new", "fix", "check" })
+      return vim.tbl_filter(function(s) return vim.startswith(s, lead) end, { "new", "fix", "sync", "check" })
     end,
     desc = "spellbook: write a generator's files",
   })
@@ -453,7 +508,11 @@ function M.setup(o)
   local group = vim.api.nvim_create_augroup("sorcerer_spellbook", { clear = true })
   vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile", "BufWritePost", "BufEnter" }, {
     group = group,
-    callback = function(a) M.attach(a.buf) end,
+    callback = function(a)
+      local was_attached = #vim.lsp.get_clients({ name = "spellbook", bufnr = a.buf }) > 0
+      M.attach(a.buf)
+      if a.event == "BufWritePost" and not was_attached then M.first_save(a.buf) end
+    end,
   })
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(buf) then M.attach(buf) end
