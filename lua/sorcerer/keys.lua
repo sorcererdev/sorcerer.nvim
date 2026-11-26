@@ -1,5 +1,5 @@
 -- sorcerer's keys, all under one prefix (`<leader>m`): conjure here, undo, try harder, why,
--- `:Spellbook new`, `:Spellbook fix` and `:Spellbook check`. Each runs the same code action the server offers,
+-- `:Spellbook new`, `:Spellbook fix`, `:Spellbook sync` and `:Spellbook check`. Each runs the same code action the server offers,
 -- so a line offers exactly what it did before. A key you already mapped is never overwritten:
 -- it is skipped and `:checkhealth sorcerer` lists it. `keys = false` binds nothing.
 local M = {}
@@ -13,6 +13,7 @@ local table_of_keys = {
   { name = "why", modes = { "n" }, tool = "conjure", title = "conjure: Show why", desc = "sorcerer: why this change" },
   { name = "fix", modes = { "n" }, tool = "spellbook", fix = true, desc = "sorcerer: apply the finding's fix" },
   { name = "check", modes = { "n" }, tool = "spellbook", cmd = "Spellbook check", desc = "sorcerer: check the project's rules" },
+  { name = "sync", modes = { "n" }, tool = "spellbook", cmd = "Spellbook sync", desc = "sorcerer: sync the owned regions" },
 }
 
 local bound, skipped = {}, {}

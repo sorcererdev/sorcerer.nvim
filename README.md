@@ -95,6 +95,7 @@ sorcerer binds its keys under one prefix, `<leader>m`, for the tools you turned 
 | `<leader>mt` | try the change again, harder | conjure |
 | `<leader>mw` | show why the change was made | conjure |
 | `<leader>mk` | `:Spellbook check`, the rules over the project into the quickfix list | spellbook |
+| `<leader>ms` | `:Spellbook sync`, the owned regions refreshed | spellbook |
 
 `conjure` and `undo` are the code actions **Conjure here** and **conjure: Undo** on the cursor's
 line, so a line offers what it always did. Change a key, or one `false` to skip it:
@@ -184,6 +185,17 @@ in `DiffDelete`; a new file is `+ path` as in `new`. `<CR>` applies: the server'
 changed buffers are left modified; `:wa` saves them), and the new files are written. The end line
 says `spellbook: fixed commands-use-ports in close_table.py · changed 2 files · wrote 4 files`. If
 the file changed since the plan, nothing is applied and you are told.
+
+**Owned regions.** A project's `.sorcerer/spellbook/regions.toml` names the lists spellbook
+keeps (a `mod.rs`'s `pub mod` lines, an `__init__.py`'s re-exports), each between two marker
+comments. Write or delete a file such a list names and save: the block is refreshed, in its
+buffer when the file is open (left modified, `u` takes it back), on disk when it is not, and the
+message line says `spellbook: synced region modules in src/booking/commands/mod.rs (+1 −0)`.
+With `[spellbook] sync_on_save = false` in `.sorcerer/config.toml` a stale block is a
+`region-stale` error on its opening marker instead, whose quick fix (`<leader>mf`) is
+`spellbook: Sync region modules`. `:Spellbook sync` (`<leader>ms`) refreshes every region: the
+float shows each file as `~ path (region modules: +1 −0)` with its hunks, `<CR>` lands it as a
+fix does, and nothing to do says `spellbook: regions up to date`.
 
 **Holes work like snippet placeholders.** After the apply you land on the first hole's
 placeholder, selected (select mode): type and it is replaced. `<Tab>` moves to the next hole,

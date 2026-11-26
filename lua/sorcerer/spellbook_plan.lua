@@ -5,19 +5,31 @@ local M = {}
 
 local ns = vim.api.nvim_create_namespace("sorcerer_spellbook_plan")
 
+-- `+3 −1`, `region modules: +1 −0` or `region ports: set up, 2 items`.
+local function changed_text(file)
+  local counts = ("+%d −%d"):format(file.added or 0, file.removed or 0)
+  if not file.region then return counts end
+  if file.set_up then
+    return ("region %s: set up, %d %s"):format(file.region, file.set_up, file.set_up == 1 and "item" or "items")
+  end
+  return ("region %s: %s"):format(file.region, counts)
+end
+
 -- The float's lines; the (0-based) lines to light as holes, each with the placeholder's text
 -- (or "" when the server did not say); the sections: each new file's `{ path, first_row
 -- (0-based row of its first line), text }`; and the (0-based) rows of a diff's added and removed
 -- lines, `{ [row] = "DiffAdd" | "DiffDelete" }`. PLAN is the server's reply.
 -- Example: a changed file with `+3 -1` is the row `~ close_table.py (+3 −1)`, then under
--- `── close_table.py ──` its hunks.
+-- `── close_table.py ──` its hunks; a file whose owned region changes names it,
+-- `~ commands/mod.rs (region modules: +1 −0)` (`(region ports: set up, 2 items)` for a sync that
+-- sets one up).
 function M.lines(plan)
   local lines, lit, sections, diff = {}, {}, {}, {}
   for _, file in ipairs(plan.files) do
     if file.status == "skipped" then
       table.insert(lines, ("= %s (exists, skipped)"):format(file.path))
     elseif file.status == "changed" then
-      table.insert(lines, ("~ %s (+%d −%d)"):format(file.path, file.added or 0, file.removed or 0))
+      table.insert(lines, ("~ %s (%s)"):format(file.path, changed_text(file)))
     else
       table.insert(lines, ("+ %s (%d lines)"):format(file.path, file.lines))
     end
@@ -99,8 +111,13 @@ end
 
 -- The float's title. Example: ` spellbook: command · <CR> apply · q cancel `; for a fix
 -- ` spellbook: fix commands-use-ports · Use a port the service has · 2 files changed · 4 new ·
--- app bistro (from the finding) · <CR> apply · q cancel `. SETTLED is the inputs the finding gave.
+-- app bistro (from the finding) · <CR> apply · q cancel `; for a sync ` spellbook: sync · 1 file
+-- changed · <CR> apply · q cancel `. SETTLED is the inputs the finding gave.
 function M.title(plan, settled)
+  if plan.generator == "sync" then
+    local n = #plan.files
+    return (" spellbook: sync · %d %s changed · <CR> apply · q cancel "):format(n, n == 1 and "file" or "files")
+  end
   if not plan.fix then return (" spellbook: %s · <CR> apply · q cancel "):format(plan.generator) end
   local changed, fresh = 0, 0
   for _, file in ipairs(plan.files) do

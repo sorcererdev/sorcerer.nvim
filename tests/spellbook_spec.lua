@@ -859,3 +859,139 @@ describe("sorcerer.spellbook :Spellbook fix", function()
     assert.equals("booking_repository", logged(log, "spellbook.plan")[1][2].port)
   end)
 end)
+
+-- ---- owned regions: the rows, :Spellbook sync and the region's quick fix ----
+
+local REGION_FILE = "src/b.py"
+local sync_plan = {
+  id = "sy12", generator = "sync", inputs = {}, holes = {}, notes = {},
+  files = {
+    {
+      path = REGION_FILE, status = "changed", text = "x = 1\nfrom .c import C\n", lines = 2, added = 1, removed = 0, region = "exports",
+      hunks = { { header = "@@ -1,1 +1,2 @@", from = 1, to = 1, lines = { " x = 1", "+from .c import C" } } },
+    },
+  },
+}
+local sync_fix_argument = {
+  generator = "sync", inputs = { region = "exports", file = REGION_FILE }, missing = {},
+  fix = { file = REGION_FILE, line = 1, rule = "region-stale", index = 1, label = "Sync region exports", version = vim.NIL },
+}
+
+describe("sorcerer.spellbook_plan, a region's row", function()
+  it("names the region a changed file's block is, and what a set up holds", function()
+    local lines = require("sorcerer.spellbook_plan").lines({
+      generator = "sync", holes = {},
+      files = {
+        { path = "src/booking/commands/mod.rs", status = "changed", text = "", lines = 1, added = 1, region = "modules" },
+        { path = "src/booking/ports/mod.rs", status = "changed", text = "", lines = 1, added = 4, region = "ports", set_up = 2 },
+      },
+    })
+    assert.equals("~ src/booking/commands/mod.rs (region modules: +1 −0)", lines[1])
+    assert.equals("~ src/booking/ports/mod.rs (region ports: set up, 2 items)", lines[2])
+    assert.equals(" spellbook: sync · 2 files changed · <CR> apply · q cancel ",
+      require("sorcerer.spellbook_plan").title({ generator = "sync", files = { {}, {} } }))
+  end)
+end)
+
+describe("sorcerer.spellbook :Spellbook sync", function()
+  local root, log, messages, notify
+
+  before_each(function()
+    stop_all()
+    close_floats()
+    vim.cmd("silent! %bwipeout!")
+    log = vim.fn.tempname()
+    vim.env.FAKE_LSP_LOG = log
+    vim.env.FAKE_LSP_NAME = "spellbook"
+    root = project()
+    messages, notify = {}, vim.notify
+    vim.notify = function(msg) table.insert(messages, msg) end
+  end)
+
+  after_each(function()
+    vim.notify = notify
+    vim.env.FAKE_LSP_NAME = nil
+    vim.env.FAKE_LSP_REPLIES = nil
+    close_floats()
+  end)
+
+  local function start(extra)
+    replies(vim.tbl_extend("force", {
+      ["spellbook.plan"] = sync_plan,
+      ["spellbook.apply"] = { changed = { REGION_FILE }, written = {}, skipped = {}, refused = vim.NIL, holes = {}, first = vim.NIL, stops = {} },
+    }, extra or {}))
+    local dir = vim.env.FAKE_LSP_REPLIES
+    vim.fn.writefile({ vim.json.encode({
+      { title = "spellbook: Sync region exports", kind = "quickfix", isPreferred = true,
+        command = { title = "Sync region exports", command = "spellbook.fix", arguments = { sync_fix_argument } } },
+    }) }, dir .. "/textDocument_codeAction.json")
+    vim.fn.writefile({ vim.json.encode({
+      label = "spellbook: sync region exports",
+      edit = { documentChanges = { {
+        textDocument = { uri = vim.uri_from_fname(root .. "/" .. REGION_FILE), version = vim.NIL },
+        edits = { { range = { start = { line = 1, character = 0 }, ["end"] = { line = 1, character = 0 } }, newText = "from .c import C\n" } },
+      } } },
+    }) }, dir .. "/workspace_applyEdit.json")
+    sorcerer.setup({ scry = { enabled = false }, spellbook = { enabled = true, cmd = { fake, "lsp" } } })
+    vim.cmd.edit(root .. "/" .. REGION_FILE)
+    wait(function() return #clients() == 1 and clients()[1].initialized end)
+    wait(function() return vim.tbl_contains(vim.lsp.get_clients({ bufnr = 0 }), clients()[1]) end)
+  end
+
+  local function plan_float()
+    local buf
+    wait(function() local w, b = float(); buf = b; return w ~= nil end)
+    return buf
+  end
+
+  it("<leader>ms plans the sync, asking nothing, and shows the region's row and hunks", function()
+    start()
+    local asked = pickers({})
+    vim.fn.maparg("<leader>ms", "n", false, true).callback()
+    local buf = plan_float()
+    assert.same({ { "sync", {} } }, vim.tbl_map(function(args) return { args[1], args[2] } end, logged(log, "spellbook.plan")))
+    assert.equals(0, #logged(log, "spellbook.generators"))
+    assert.equals(0, #asked.select + #asked.input)
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    assert.equals("~ src/b.py (region exports: +1 −0)", lines[1])
+    assert.truthy(vim.tbl_contains(lines, "+from .c import C"))
+  end)
+
+  it("<CR> lands the sync through the editor and says what it synced", function()
+    start()
+    local buf = vim.api.nvim_get_current_buf()
+    vim.cmd("Spellbook sync")
+    press(plan_float(), "<CR>")
+    wait(function() return #messages > 0 end)
+    assert.same({ "x = 1", "from .c import C" }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+    assert.is_true(vim.bo[buf].modified)
+    assert.equals("spellbook: synced 1 file", messages[#messages])
+  end)
+
+  it("nothing to sync is said, and no plan is shown", function()
+    start({ ["spellbook.plan"] = vim.tbl_extend("force", sync_plan, { files = {} }) })
+    vim.cmd("Spellbook sync")
+    wait(function() return #messages > 0 end)
+    assert.equals("spellbook: regions up to date", messages[1])
+    assert.is_nil(float())
+  end)
+
+  it("a region file with unsaved changes is refused, by name", function()
+    start()
+    vim.api.nvim_buf_set_lines(0, 0, 1, false, { "x = 2" })
+    vim.cmd("Spellbook sync")
+    wait(function() return #messages > 0 end)
+    assert.equals("spellbook: save b.py first; a fix is planned against the file on disk", messages[1])
+    assert.is_nil(float())
+  end)
+
+  it("a stale region's quick fix (<leader>mf) is the sync, with its region and file", function()
+    start()
+    vim.fn.maparg("<leader>mf", "n", false, true).callback()
+    plan_float()
+    local planned = logged(log, "spellbook.plan")
+    assert.equals(1, #planned)
+    assert.same({ "sync", { region = "exports", file = REGION_FILE } }, { planned[1][1], planned[1][2] })
+    assert.equals(0, #logged(log, "spellbook.generators"))
+  end)
+end)
