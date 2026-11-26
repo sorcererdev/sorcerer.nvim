@@ -228,7 +228,7 @@ Jev what it is; on save it answers a question or checks a claim, in the margin (
 sonnet`. Accepting runs a task: its changes land in your buffers (unsaved, `u` undoes them), the
 status line says what it does, a question it asks is choices on a line or a list, and at the end
 a `✦ apprentice: …` mark on each changed file offers **Show diff** (the file before the task
-against now, side by side in diff mode), **Undo this task** and **Show journal**. Saving every
+against now, side by side in diff mode in a tab of its own; `:tabclose` ends it), **Undo this task** and **Show journal**. Saving every
 file it changed keeps the task.
 
 The plugin starts `apprentice lsp` with `debounce_text_changes = 0` and on every buffer under the

@@ -120,6 +120,18 @@ describe("sorcerer.apprentice", function()
     assert.equals(vim.fn.bufnr(root .. "/src/a.py"), vim.api.nvim_get_current_buf())
   end)
 
+  it("shows the diff while another buffer has unsaved changes", function()
+    local root, c = started()
+    vim.o.hidden = false
+    vim.cmd.edit(root .. "/src/b.py")
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "x = 2" })
+    local uri = vim.uri_from_fname(root .. "/src/a.py")
+    c.handlers["sorcerer/showDiff"](nil, { uri = uri, before = "", title = "apprentice: before" }, { client_id = c.id })
+    vim.o.hidden = true
+    assert.equals(vim.fn.bufnr(root .. "/src/a.py"), vim.api.nvim_get_current_buf())
+    assert.is_true(vim.wo.diff)
+  end)
+
   it("binds its keys under <leader>m when it is on", function()
     for _, key in ipairs({ "a", "s", "d", "z", "j", "x", "l" }) do assert.truthy(vim.fn.maparg("<leader>m" .. key, "n") ~= "", key) end
     assert.equals("<leader>ma", keys.lhs("do"))

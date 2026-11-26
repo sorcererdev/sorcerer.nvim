@@ -11,7 +11,7 @@
 --     gone at your next edit of that line, or when `lines` is empty;
 --   * `sorcerer/note` { uri }: the agent's note opened in a vertical split beside the code;
 --   * `sorcerer/showDiff` { uri, before, title }: the file before the task against now, a
---     scratch buffer and the live one side by side in diff mode.
+--     scratch buffer and the live one side by side in diff mode, in a tab of their own.
 -- Everything else (marks, code actions, the picker, edits) is Neovim's own.
 local M = {}
 
@@ -103,8 +103,11 @@ end
 -- The file before the task against the live buffer, in diff mode, side by side.
 function M.show_diff(result)
   if not result or not result.uri then return end
-  local path = vim.uri_to_fname(result.uri)
-  vim.cmd("edit " .. vim.fn.fnameescape(path))
+  -- in a tab of its own (`:tabclose` ends it), so the window you were in, unsaved or not, stays
+  local buf = vim.fn.bufadd(vim.uri_to_fname(result.uri))
+  vim.fn.bufload(buf)
+  vim.bo[buf].buflisted = true
+  vim.cmd("tab sbuffer " .. buf)
   local live = vim.api.nvim_get_current_win()
   local filetype = vim.bo.filetype
   vim.cmd("leftabove vnew")
