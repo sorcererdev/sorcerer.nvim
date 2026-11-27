@@ -163,8 +163,8 @@ that `conjure` is found when it is enabled.
 [spellbook](https://github.com/sorcererdev/sorcerer) keeps a project's conventions as
 generators: `:Spellbook new` writes every file of one (a command and its test, say) after a
 preview, and leaves each **hole** (code that parses and says what belongs there) marked on its
-line. It is off by default, calls no model and needs no key. No installer is published yet:
-`cargo install --git https://github.com/sorcererdev/sorcerer sorcerer-spellbook`. Then:
+line. It is off by default, calls no model and needs no key. Install it as you did scry
+(`sorcerer-spellbook-installer`, or `cargo install sorcerer-spellbook`). Then:
 
 ```lua
 require("sorcerer").setup({ spellbook = { enabled = true } })
@@ -233,8 +233,9 @@ The project must be trusted (`spellbook trust`) when its own config runs code.
 ## Lackey
 
 [lackey](https://github.com/sorcererdev/sorcerer) is a coding agent whose whole interface is
-your editor: no chat. It is a **prototype**, built from source and not released:
-`cargo install --git https://github.com/sorcererdev/sorcerer sorcerer-lackey`. It needs
+your editor: no chat. Install it as you did scry
+(`sorcerer-lackey-installer`, or `cargo install sorcerer-lackey`). It runs Claude Code
+(`claude -p`) on your own subscription, so it needs
 `claude` (Claude Code, signed in) for tasks and `JEV_API_KEY` for reading what you write;
 `lackey doctor` in a project checks both. Turn it on:
 

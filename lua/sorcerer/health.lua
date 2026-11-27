@@ -13,12 +13,12 @@ local function check_lackey()
   vim.health.start("sorcerer: lackey")
   local exe = (lackey.cmd or { "lackey", "lsp" })[1]
   if vim.fn.executable(exe) == 0 then
-    vim.health.error(("`%s` is not on the path"):format(exe), { "build it: " .. lackey_install, "or set lackey.cmd in setup()" })
+    vim.health.error(("`%s` is not on the path"):format(exe), { "install it: " .. lackey_install, "or set lackey.cmd in setup()" })
     return
   end
   local out = vim.fn.system({ exe, "--version" })
   if vim.v.shell_error ~= 0 then
-    vim.health.error(("`%s --version` failed: %s"):format(exe, vim.trim(out)), { "rebuild it: " .. lackey_install })
+    vim.health.error(("`%s --version` failed: %s"):format(exe, vim.trim(out)), { "reinstall it: " .. lackey_install })
     return
   end
   vim.health.ok(("%s found: %s"):format(exe, vim.trim(out)))

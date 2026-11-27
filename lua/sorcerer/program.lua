@@ -12,10 +12,12 @@ M.install = {
   conjure = windows
       and [[powershell -ExecutionPolicy ByPass -c "irm https://github.com/sorcererdev/sorcerer/releases/latest/download/sorcerer-conjure-installer.ps1 | iex"]]
     or [[curl --proto '=https' --tlsv1.2 -LsSf https://github.com/sorcererdev/sorcerer/releases/latest/download/sorcerer-conjure-installer.sh | sh]],
-  -- no installer is published for it yet
-  spellbook = "cargo install --git https://github.com/sorcererdev/sorcerer sorcerer-spellbook",
-  -- a prototype: built from source, not released
-  lackey = "cargo install --git https://github.com/sorcererdev/sorcerer sorcerer-lackey",
+  spellbook = windows
+      and [[powershell -ExecutionPolicy ByPass -c "irm https://github.com/sorcererdev/sorcerer/releases/latest/download/sorcerer-spellbook-installer.ps1 | iex"]]
+    or [[curl --proto '=https' --tlsv1.2 -LsSf https://github.com/sorcererdev/sorcerer/releases/latest/download/sorcerer-spellbook-installer.sh | sh]],
+  lackey = windows
+      and [[powershell -ExecutionPolicy ByPass -c "irm https://github.com/sorcererdev/sorcerer/releases/latest/download/sorcerer-lackey-installer.ps1 | iex"]]
+    or [[curl --proto '=https' --tlsv1.2 -LsSf https://github.com/sorcererdev/sorcerer/releases/latest/download/sorcerer-lackey-installer.sh | sh]],
 }
 
 -- program -> true when it was found, false when it was missing (and said so)
