@@ -354,6 +354,8 @@ describe("sorcerer.spellbook :Spellbook new", function()
     vim.cmd("Spellbook new command my-input=x")
     wait(function() return #logged(log, "spellbook.plan") == 1 end)
     assert.equals("x", logged(log, "spellbook.plan")[1][2]["my-input"])
+    -- the flow ends with the plan shown: leaving earlier lets its float open during the next test's setup
+    wait(function() return float() ~= nil end)
   end)
 
   -- a conjure client beside the running spellbook one; the server was started by canned_all
