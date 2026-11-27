@@ -33,6 +33,21 @@ environment Neovim starts in. `scry doctor` in a project checks them.
 }
 ```
 
+scry is on by default, the other tools off. **Here for lackey only?** Turn scry off, or every
+start says `scry` is not on the path:
+
+```lua
+{
+  "sorcererdev/sorcerer.nvim",
+  opts = {
+    scry = { enabled = false },   -- drop this line if you installed scry too
+    lackey = { enabled = true },
+  },
+}
+```
+
+Then see [Lackey](#lackey) below for what it needs (`claude`, a Jev key) and what to write.
+
 ## Setup
 
 These are the defaults; pass only what you change.
@@ -64,7 +79,8 @@ require("sorcerer").setup({
   review is dimmed.
 - The first time a project's own config asks for something that runs code, scry asks whether
   to trust the project. Answer in the prompt Neovim shows.
-- `:checkhealth sorcerer` checks that `scry` is found. If it is missing, Neovim says so once
+- `:checkhealth sorcerer` checks that `scry` is found (with `scry = { enabled = false }` it says
+  scry is off instead). If it is missing, Neovim says so once
   a session (not on every file) and starts no server.
 - Tip: `vim.diagnostic.config({ float = { source = true } })` makes the diagnostic float show
   which tool (`scry`) said it.
@@ -88,7 +104,8 @@ with the line as you edit, and goes when the work ends or the server exits. Its 
 
 ## Keys
 
-sorcerer binds its keys under one prefix, `<leader>m`, for the tools you turned on:
+sorcerer binds its keys under one prefix, `<leader>m`, for the tools you turned on (lackey's
+are in [its own table](#lackey)):
 
 | key | does | needs |
 |---|---|---|
@@ -233,15 +250,36 @@ The project must be trusted (`spellbook trust`) when its own config runs code.
 ## Lackey
 
 [lackey](https://github.com/sorcererdev/sorcerer) is a coding agent whose whole interface is
-your editor: no chat. Install it as you did scry
-(`sorcerer-lackey-installer`, or `cargo install sorcerer-lackey`). It runs Claude Code
-(`claude -p`) on your own subscription, so it needs
-`claude` (Claude Code, signed in) for tasks and `JEV_API_KEY` for reading what you write;
-`lackey doctor` in a project checks both. Turn it on:
+your editor: no chat. The whole first-time path is
+[Getting started](https://github.com/sorcererdev/sorcerer/blob/main/book/user/src/lackey.md#getting-started)
+in the user book; in short:
+
+1. Install it as you would scry (`sorcerer-lackey-installer.sh` / `.ps1` from the
+   [release](https://github.com/sorcererdev/sorcerer/releases/latest), or
+   `cargo install sorcerer-lackey`).
+2. It runs Claude Code (`claude -p`) on your own subscription: install
+   [Claude Code](https://docs.anthropic.com/en/docs/claude-code), run `claude` once in a
+   terminal and log in.
+3. Jev reads what you write: sign up at [typesafe.ai](https://typesafe.ai) (free) and
+   `export JEV_API_KEY=…` in your shell profile, then restart Neovim from a new terminal.
+   Without it only empty function bodies are offered.
+4. `lackey doctor` in a project: every row `ok` (`warn` says what lackey will not do).
+5. Turn it on (scry off unless you installed it):
 
 ```lua
-require("sorcerer").setup({ lackey = { enabled = true } })
+require("sorcerer").setup({
+  scry = { enabled = false },   -- drop this line if you installed scry too
+  lackey = { enabled = true },
+})
 ```
+
+**Your first offer.** In a Python or Rust file of a git repository, on a line of its own at the
+end (not inside a function), write `# Add a median(prices) function that returns the middle
+price.` and stop typing. About two seconds later a faint `lackey: I can do this · ~$0.50 ·
+sonnet` hint appears; `<leader>ma` runs it. A comment inside a function that describes a change
+may be read as an aside and get no offer: `<leader>ma` then says `lackey: no offer on this
+line`; put the request above the function, start it with what to do, or label the line
+(`<leader>ml`).
 
 Write in your code: a comment, a sentence in a docstring, an empty body. On idle lackey asks
 Jev what it is; on save it answers a question or checks a claim, in the margin (source
@@ -259,7 +297,7 @@ notes in a vertical split beside your code, and the diff view. Its keys:
 
 | key | does |
 |---|---|
-| `<leader>ma` | **lackey: do this** on the line (whatever its price) |
+| `<leader>ma` | **lackey: do this** on the line (whatever its price); with no offer there, it says so |
 | `<leader>mo` | **lackey: Open the answer**: a long answer, beside your code (none opens unasked) |
 | `<leader>mq` | **lackey: Stop this task** (q for quit; `s` is spellbook sync) |
 | `<leader>md` | **lackey: Show diff** |

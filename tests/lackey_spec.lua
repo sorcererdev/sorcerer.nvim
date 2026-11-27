@@ -186,6 +186,49 @@ describe("sorcerer.lackey", function()
     assert.is_false(applied.filter({ title = "lackey: Dismiss" }))
   end)
 
+  it("the do key on a line with no offer says so, not 'No code actions available'", function()
+    stop_all()
+    local dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+    vim.fn.writefile({ vim.json.encode({
+      { title = "lackey: this was an instruction", command = { title = "lackey: this was an instruction", command = "lackey.label", arguments = {} } },
+    }) }, dir .. "/textDocument_codeAction.json")
+    vim.env.FAKE_LSP_REPLIES = dir
+    started()
+    local said
+    local real_notify, real_action = vim.notify, vim.lsp.buf.code_action
+    local applied = false
+    vim.notify = function(msg) said = msg end
+    vim.lsp.buf.code_action = function() applied = true end
+    vim.fn.maparg("<leader>ma", "n", false, true).callback()
+    local ok = vim.wait(3000, function() return said ~= nil end, 10)
+    vim.notify, vim.lsp.buf.code_action = real_notify, real_action
+    vim.env.FAKE_LSP_REPLIES = nil
+    assert.is_true(ok, "nothing was said")
+    assert.truthy(said:find("lackey: no offer on this line", 1, true), said)
+    assert.is_false(applied)
+  end)
+
+  it("the do key on a line with an offer runs it", function()
+    stop_all()
+    local dir = vim.fn.tempname()
+    vim.fn.mkdir(dir, "p")
+    vim.fn.writefile({ vim.json.encode({
+      { title = "lackey: do this · ~$0.50 · sonnet", command = { title = "lackey: do this · ~$0.50 · sonnet", command = "lackey.do", arguments = {} } },
+    }) }, dir .. "/textDocument_codeAction.json")
+    vim.env.FAKE_LSP_REPLIES = dir
+    started()
+    local real = vim.lsp.buf.code_action
+    local applied
+    vim.lsp.buf.code_action = function(o) applied = o end
+    vim.fn.maparg("<leader>ma", "n", false, true).callback()
+    local ok = vim.wait(3000, function() return applied ~= nil end, 10)
+    vim.lsp.buf.code_action = real
+    vim.env.FAKE_LSP_REPLIES = nil
+    assert.is_true(ok, "the offer was not run")
+    assert.is_true(applied.filter({ title = "lackey: do this · ~$0.50 · sonnet" }))
+  end)
+
   it("the label key lists the four labels to pick from", function()
     local applied
     local real = vim.lsp.buf.code_action
@@ -195,6 +238,20 @@ describe("sorcerer.lackey", function()
     assert.is_false(applied.apply)
     assert.is_true(applied.filter({ title = "lackey: this was a claim" }))
     assert.is_false(applied.filter({ title = "lackey: do this · ~$0.50 · sonnet" }))
+  end)
+
+  it(":checkhealth with scry off and lackey on reports no scry error", function()
+    local said = { error = {}, info = {} }
+    local real = vim.health
+    vim.health = setmetatable({
+      error = function(msg) table.insert(said.error, msg) end,
+      info = function(msg) table.insert(said.info, msg) end,
+    }, { __index = function() return function() end end })
+    local ok, err = pcall(require("sorcerer.health").check)
+    vim.health = real
+    assert.is_true(ok, err)
+    for _, msg in ipairs(said.error) do assert.is_nil(msg:find("scry", 1, true), msg) end
+    assert.truthy(vim.tbl_contains(said.info, "scry is off (scry = { enabled = false })"))
   end)
 
   it("status follows the task's progress", function()

@@ -15,7 +15,8 @@ local table_of_keys = {
   { name = "fix", modes = { "n" }, tool = "spellbook", fix = true, desc = "sorcerer: apply the finding's fix" },
   { name = "check", modes = { "n" }, tool = "spellbook", cmd = "Spellbook check", desc = "sorcerer: check the project's rules" },
   { name = "sync", modes = { "n" }, tool = "spellbook", cmd = "Spellbook sync", desc = "sorcerer: sync the owned regions" },
-  { name = "do", modes = { "n" }, tool = "lackey", title = "lackey: do this", prefix = true, desc = "sorcerer: lackey, do this" },
+  { name = "do", modes = { "n" }, tool = "lackey", title = "lackey: do this", prefix = true, desc = "sorcerer: lackey, do this",
+    none = "lackey: no offer on this line: it was not read as an instruction. Ask for something new (`# Add a median(prices) function …`) or label it (`lackey: this was an instruction`)" },
   { name = "stop", modes = { "n" }, tool = "lackey", title = "lackey: Stop this task", desc = "sorcerer: stop lackey's task" },
   { name = "diff", modes = { "n" }, tool = "lackey", title = "lackey: Show diff", desc = "sorcerer: the task's diff of this file" },
   { name = "undo_task", modes = { "n" }, tool = "lackey", title = "lackey: Undo this task", desc = "sorcerer: undo lackey's task" },
@@ -37,6 +38,28 @@ local function code_action_titled(title, prefix, choose)
     return action.title == title
   end
   vim.lsp.buf.code_action({ apply = not choose, filter = matches })
+end
+
+-- Run the code action titled TITLE as code_action_titled does, but when the line offers none
+-- say NONE instead of Neovim's "No code actions available", which reads as if the key were
+-- broken. The tool's own server is asked first; without one the action runs as usual.
+-- Example: `<leader>ma` on a comment lackey read as an aside says why there is no task.
+local function code_action_titled_or_say(tool, title, prefix, none)
+  local client = vim.lsp.get_clients({ bufnr = 0, name = tool })[1]
+  if not client then return code_action_titled(title, prefix) end
+  local params = vim.lsp.util.make_range_params(0, client.offset_encoding)
+  params.context = { diagnostics = {}, triggerKind = 1 }
+  local buf = vim.api.nvim_get_current_buf()
+  local ask = vim.fn.has("nvim-0.11") == 1 and function(...) return client:request(...) end
+    or function(...) return client.request(...) end
+  ask("textDocument/codeAction", params, function(_, actions)
+    for _, action in ipairs(actions or {}) do
+      if action.title:sub(1, #title) == title then
+        return vim.api.nvim_buf_call(buf, function() code_action_titled(title, prefix) end)
+      end
+    end
+    vim.notify(none, vim.log.levels.INFO)
+  end, buf)
 end
 
 -- Take back the maps this module made (only those still ours: a key you mapped since is left).
@@ -71,6 +94,7 @@ function M.setup(opts)
       else
         local run = one.cmd and function() vim.cmd(one.cmd) end
           or one.fix and function() require("sorcerer.spellbook").fix_here() end
+          or one.none and function() code_action_titled_or_say(one.tool, one.title, one.prefix, one.none) end
           or function() code_action_titled(one.title, one.prefix, one.choose) end
         vim.keymap.set(one.modes, lhs, run, { desc = one.desc })
         table.insert(bound, { name = one.name, lhs = lhs, modes = one.modes, desc = one.desc })
