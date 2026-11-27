@@ -230,6 +230,19 @@ local function start_holes(reply, abs, conjure)
   return false
 end
 
+-- The changed files (paths from ROOT) that no window shows: the fix's edit left them unsaved in
+-- hidden buffers, so the end line names them.
+local function not_shown(root, changed)
+  local shown = {}
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local name = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win))
+    if name ~= "" then shown[vim.fs.normalize(name)] = true end
+  end
+  return vim.tbl_filter(function(path)
+    return not shown[vim.fs.normalize(vim.fs.joinpath(root, path))]
+  end, changed or {})
+end
+
 -- After an apply: the end line, always, and the first hole's file open, its holes as a session
 -- of snippet placeholders (spellbook_holes.lua; the session's hole message follows the end line)
 -- or else the holes counted on the end line, and conjure on the first hole when asked. The
@@ -238,9 +251,12 @@ end
 local function finish(client, reply, fixed)
   local first = reply.first
   local conjure = conjure_for(client)
+  local function end_text()
+    return M.end_text(reply, fixed, fixed and not fixed.sync and not_shown(client.config.root_dir, reply.changed) or {})
+  end
   local function end_line()
     local n = holes_to_fill(reply.holes)
-    local text = M.end_text(reply, fixed)
+    local text = end_text()
     if n > 0 then
       local key = require("sorcerer.keys").lhs("conjure")
       text = text .. (conjure and (" · %d holes · %s to conjure the first"):format(n, key or "Conjure here (a code action)")
@@ -277,7 +293,7 @@ local function finish(client, reply, fixed)
       end
     end
     if start_holes(reply, abs, conjure) then
-      say(M.end_text(reply, fixed))
+      say(end_text())
     else
       end_line()
     end
@@ -285,14 +301,22 @@ local function finish(client, reply, fixed)
 end
 
 -- The first part of the end line: what was written, or after a fix (FIXED = { rule, file }) what
--- it fixed, changed and wrote; a sync (FIXED.sync) what it synced.
+-- it fixed, changed (naming at most three changed files in HIDDEN, which no window shows) and
+-- wrote; a sync (FIXED.sync) what it synced.
 -- Example: `spellbook: wrote 2 files`; `spellbook: synced 1 file`;
--- `spellbook: fixed commands-use-ports in close_table.py · changed 2 files · wrote 4 files`.
-function M.end_text(reply, fixed)
+-- `spellbook: fixed commands-use-ports in close_table.py · changed 2 files · close_table__test.py
+-- not shown, unsaved · wrote 4 files`.
+function M.end_text(reply, fixed, hidden)
   local function files(n) return ("%d %s"):format(n, n == 1 and "file" or "files") end
   if fixed and fixed.sync then return ("spellbook: synced %s"):format(files(#(reply.changed or {}))) end
   if not fixed then return ("spellbook: wrote %s"):format(files(#reply.written)) end
   local text = ("spellbook: fixed %s in %s · changed %s"):format(fixed.rule, vim.fs.basename(fixed.file), files(#(reply.changed or {})))
+  hidden = hidden or {}
+  if #hidden > 0 then
+    local names = vim.tbl_map(vim.fs.basename, vim.list_slice(hidden, 1, 3))
+    local more = #hidden > 3 and (" and %d more"):format(#hidden - 3) or ""
+    text = text .. (" · %s%s not shown, unsaved"):format(table.concat(names, ", "), more)
+  end
   if #reply.written > 0 then text = text .. " · wrote " .. files(#reply.written) end
   return text
 end
