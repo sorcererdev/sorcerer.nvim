@@ -1,5 +1,5 @@
 -- lackey's language server: `lackey lsp`, a coding agent whose whole interface is the
--- editor (a prototype). It answers and checks what you write, offers what you ask for, and runs
+-- editor. It answers and checks what you write, offers what you ask for, and runs
 -- a task in your buffers when you accept: every change lands through `workspace/applyEdit`,
 -- undoable. Like conjure it needs, from this client:
 --   * `debounce_text_changes = 0`: Neovim sends `didChange` at once, so a task's write never

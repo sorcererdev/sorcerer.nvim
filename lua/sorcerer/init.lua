@@ -2,7 +2,7 @@
 -- review what changed and put each verified finding on its line; nothing to say, nothing shown.
 -- conjure (the writer) is opt-in beside it: a code action writes one change and marks it.
 -- spellbook (generators with holes, and rules) is opt-in too: `:Spellbook new`.
--- lackey (an agent whose interface is the editor, a prototype) is opt-in as well.
+-- lackey (an agent whose interface is the editor) is opt-in as well.
 local M = {}
 
 M.defaults = {
@@ -21,7 +21,7 @@ M.defaults = {
     -- the margin glyph of a conjured change; false gives Neovim's own display back
     sign = "✦",
   },
-  -- off by default: a prototype, built from source
+  -- off by default: it runs Claude Code on your own subscription
   lackey = {
     enabled = false,
     cmd = { "lackey", "lsp" },
