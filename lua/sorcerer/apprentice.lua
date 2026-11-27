@@ -38,12 +38,15 @@ function M.client_config()
   return config
 end
 
--- Attach apprentice to buffer BUF when it is enabled and BUF is a file under a project root.
+-- Attach apprentice to buffer BUF when it is enabled and BUF names a file (on disk or not yet,
+-- but no other scheme) under a project root.
 function M.attach(buf)
   if not opts or not opts.enabled then return end
   if not vim.api.nvim_buf_is_valid(buf) or vim.bo[buf].buftype ~= "" then return end
   local name = vim.api.nvim_buf_get_name(buf)
-  if name == "" or not vim.uv.fs_stat(name) then return end
+  -- a file need not be on disk yet: a file apprentice's edit creates is only a buffer in Neovim
+  -- (CreateFile with ignoreIfExists writes nothing), and apprentice must see it to check it landed
+  if name == "" or name:match("^%a[%w+.-]*://") then return end
   local root = M.root(buf)
   if not root then return end
   if not require("sorcerer.program").runnable("apprentice", opts.cmd) then return end

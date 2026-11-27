@@ -20,12 +20,15 @@ function M.root(buf)
   return vim.fs.root(buf, ".sorcerer") or vim.fs.root(buf, ".git")
 end
 
--- Attach conjure to buffer BUF when conjure is enabled and BUF is a file under a project root.
+-- Attach conjure to buffer BUF when conjure is enabled and BUF names a file (on disk or not
+-- yet, but no other scheme such as `fugitive://`) under a project root.
 function M.attach(buf)
   if not opts or not opts.enabled then return end
   if not vim.api.nvim_buf_is_valid(buf) or vim.bo[buf].buftype ~= "" then return end
   local name = vim.api.nvim_buf_get_name(buf)
-  if name == "" or not vim.uv.fs_stat(name) then return end
+  -- a file need not be on disk yet: a file conjure's edit creates is only a buffer in Neovim
+  -- (CreateFile with ignoreIfExists writes nothing), and conjure must see it to check it landed
+  if name == "" or name:match("^%a[%w+.-]*://") then return end
   local root = M.root(buf)
   if not root then return end
   if not require("sorcerer.program").runnable("conjure", opts.cmd) then return end
