@@ -258,7 +258,7 @@ notes in a vertical split beside your code, and the diff view. Its keys:
 
 | key | does |
 |---|---|
-| `<leader>ma` | **apprentice: do this** on the line (whatever its price), or *do this anyway* on a line it did not offer |
+| `<leader>ma` | **apprentice: do this** on the line (whatever its price) |
 | `<leader>mo` | **apprentice: Open the answer**: a long answer, beside your code (none opens unasked) |
 | `<leader>mq` | **apprentice: Stop this task** (q for quit; `s` is spellbook sync) |
 | `<leader>md` | **apprentice: Show diff** |

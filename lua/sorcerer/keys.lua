@@ -1,7 +1,6 @@
 -- sorcerer's keys, all under one prefix (`<leader>m`): conjure here, undo, try harder, why,
 -- `:Spellbook new`, `:Spellbook fix`, `:Spellbook sync` and `:Spellbook check`, and apprentice's do this, stop,
--- show diff, undo the task, journal, dismiss, label and open the answer. `do` also runs *do this
--- anyway* on a line apprentice did not offer. Each runs the same code action the server offers,
+-- show diff, undo the task, journal, dismiss, label and open the answer. Each runs the same code action the server offers,
 -- so a line offers exactly what it did before. A key you already mapped is never overwritten:
 -- it is skipped and `:checkhealth sorcerer` lists it. `keys = false` binds nothing.
 local M = {}
