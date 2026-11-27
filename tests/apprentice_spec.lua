@@ -97,6 +97,22 @@ describe("sorcerer.apprentice", function()
     assert.same({}, vim.api.nvim_buf_get_extmarks(0, apprentice.ghost_ns, 0, -1, {}))
   end)
 
+  it("an edit in a window that is not the current one takes that line's ghost away", function()
+    local root, c = started()
+    local buf = vim.api.nvim_get_current_buf()
+    local uri = vim.uri_from_fname(root .. "/src/a.py")
+    c.handlers["sorcerer/ghost"](nil, { uri = uri, line = 0, lines = { "hint" } }, { client_id = c.id })
+    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+    -- another window, on a scratch buffer of three lines, with its cursor on the last
+    vim.cmd("split")
+    vim.cmd("enew")
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "one", "two", "three" })
+    vim.api.nvim_win_set_cursor(0, { 3, 0 })
+    vim.api.nvim_buf_set_lines(buf, 0, 1, false, { "def g(x):" })
+    vim.api.nvim_exec_autocmds("TextChanged", { buffer = buf })
+    assert.same({}, vim.api.nvim_buf_get_extmarks(buf, apprentice.ghost_ns, 0, -1, {}))
+  end)
+
   it("opens a note beside the code and keeps the cursor", function()
     local root, c = started()
     local note = root .. "/note.md"
