@@ -38,6 +38,9 @@ M.defaults = {
     -- how a hole and a rule finding look in the margin; false gives Neovim's own display back
     signs = { hole = "◇", rule = "≡" },
   },
+  -- the code-action menu lists the preferred quick fixes first (a spellbook rule's fix), then the
+  -- other quick fixes, then the rest, as VS Code does; false leaves Neovim's order
+  fixes_first = true,
   -- sorcerer's keys, `<prefix><key>`; each needs its tool on. Set `keys = false`, or one key to
   -- `false`, to bind nothing (or that one). A lhs you already mapped is skipped.
   keys = {
@@ -62,6 +65,7 @@ function M.setup(opts)
   require("sorcerer.spellbook").setup(M.opts.spellbook)
   require("sorcerer.apprentice").setup(M.opts.apprentice)
   require("sorcerer.keys").setup(M.opts)
+  require("sorcerer.code_actions").setup(M.opts.fixes_first)
 end
 
 -- For a status line: "scry: reviewing 2 units" while scry reviews, "conjure: conjuring a
