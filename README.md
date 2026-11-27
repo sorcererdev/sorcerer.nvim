@@ -178,7 +178,9 @@ first`; with `conjure_holes = true` the plugin runs conjure on the first hole fo
 
 **Fixes.** A rule can name the generator that repairs its finding. On a finding's line,
 `vim.lsp.buf.code_action()` lists `spellbook: Use a port the service has` first (the preferred one)
-and the others after; `<leader>mf` (or `:Spellbook fix [input=value…]`) runs the first without the
+and the others after, above other servers' rewrites: the plugin orders the code-action menu with
+the preferred quick fixes first, then quick fixes, then the rest (`fixes_first = false` keeps
+Neovim's order, which follows whichever server answers first); `<leader>mf` (or `:Spellbook fix [input=value…]`) runs the first without the
 menu. Save the file first (`spellbook: save close_table.py first; a fix is planned against the
 file on disk`). It asks only the inputs the finding does not settle, then shows the plan in the
 float: a changed file is `~ path (+3 −1)` with its hunks below, `+` lines in `DiffAdd` and `-` lines
@@ -218,6 +220,7 @@ buffer-local map you had on those keys is put back at the end. No session runs w
 | `spellbook.cmd` | `{ "spellbook", "lsp" }` | the program, if not on your PATH |
 | `spellbook.conjure_holes` | `false` | conjure the first hole after `:Spellbook new` |
 | `spellbook.hole_keys` | `{ next = "<Tab>", prev = "<S-Tab>" }` | the keys between holes after `:Spellbook new`; `false` = no session |
+| `fixes_first` | `true` | the code-action menu lists preferred quick fixes, then quick fixes, then the rest; `false` = Neovim's order |
 
 The project must be trusted (`spellbook trust`) when its own config runs code.
 `:checkhealth sorcerer` checks that `spellbook` is found when it is enabled.
