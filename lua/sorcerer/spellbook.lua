@@ -201,12 +201,13 @@ local function session_keys()
 end
 
 -- Start the hole session on the first hole's file ABS (shown by now) over REPLY's stops in that
--- file; the holes of other files are counted for the end line. False when there is none to run:
--- no stops (an older server), no keys, or the file is not in a window.
+-- file; the holes of other files are counted for the end line. The stops are the holes this
+-- apply wrote (the server leaves out older ones). False when there is none to run: no stops (an
+-- older server), no hole to fill in the plan, no keys, or the file is not in a window.
 local function start_holes(reply, abs, conjure)
   local keys = session_keys()
   local stops = reply.stops or {}
-  if not keys or #stops == 0 then return false end
+  if not keys or #stops == 0 or holes_to_fill(reply.holes) == 0 then return false end
   local mine, others = {}, {}
   for _, stop in ipairs(stops) do
     if stop.file == stops[1].file then
@@ -229,8 +230,10 @@ local function start_holes(reply, abs, conjure)
   return false
 end
 
--- After an apply: the first hole's file open, its holes as a session of snippet placeholders
--- (spellbook_holes.lua) or else the end line, and conjure on the first hole when asked. The server asks the editor to show the file; when it has not within the wait, do it.
+-- After an apply: the end line, always, and the first hole's file open, its holes as a session
+-- of snippet placeholders (spellbook_holes.lua; the session's hole message follows the end line)
+-- or else the holes counted on the end line, and conjure on the first hole when asked. The
+-- server asks the editor to show the file; when it has not within the wait, do it.
 -- FIXED ({ rule, file }) is set after a fix: the end line then says what it changed.
 local function finish(client, reply, fixed)
   local first = reply.first
@@ -273,7 +276,11 @@ local function finish(client, reply, fixed)
         return end_line()
       end
     end
-    if not start_holes(reply, abs, conjure) then end_line() end
+    if start_holes(reply, abs, conjure) then
+      say(M.end_text(reply, fixed))
+    else
+      end_line()
+    end
   end))
 end
 
