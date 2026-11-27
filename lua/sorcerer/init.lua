@@ -2,6 +2,7 @@
 -- review what changed and put each verified finding on its line; nothing to say, nothing shown.
 -- conjure (the writer) is opt-in beside it: a code action writes one change and marks it.
 -- spellbook (generators with holes, and rules) is opt-in too: `:Spellbook new`.
+-- apprentice (an agent whose interface is the editor, a prototype) is opt-in as well.
 local M = {}
 
 M.defaults = {
@@ -20,6 +21,11 @@ M.defaults = {
     -- the margin glyph of a conjured change; false gives Neovim's own display back
     sign = "✦",
   },
+  -- off by default: a prototype, built from source
+  apprentice = {
+    enabled = false,
+    cmd = { "apprentice", "lsp" },
+  },
   -- off by default: a user without spellbook installed sees no start error
   spellbook = {
     enabled = false,
@@ -34,7 +40,11 @@ M.defaults = {
   },
   -- sorcerer's keys, `<prefix><key>`; each needs its tool on. Set `keys = false`, or one key to
   -- `false`, to bind nothing (or that one). A lhs you already mapped is skipped.
-  keys = { prefix = "<leader>m", new = "n", fix = "f", conjure = "c", undo = "u", try_harder = "t", why = "w", check = "k", sync = "s" },
+  keys = {
+    prefix = "<leader>m", new = "n", fix = "f", conjure = "c", undo = "u", try_harder = "t", why = "w", check = "k", sync = "s",
+    -- apprentice: do this, stop, show diff, undo the task, journal, dismiss, label
+    ["do"] = "a", stop = "q", diff = "d", undo_task = "z", journal = "j", dismiss = "x", label = "l",
+  },
 }
 
 function M.setup(opts)
@@ -50,6 +60,7 @@ function M.setup(opts)
   require("sorcerer.scry").setup(M.opts.scry)
   require("sorcerer.conjure").setup(M.opts.conjure)
   require("sorcerer.spellbook").setup(M.opts.spellbook)
+  require("sorcerer.apprentice").setup(M.opts.apprentice)
   require("sorcerer.keys").setup(M.opts)
 end
 
@@ -61,6 +72,7 @@ function M.status()
     require("sorcerer.scry").status(),
     require("sorcerer.conjure").status(),
     require("sorcerer.spellbook").status(),
+    require("sorcerer.apprentice").status(),
   }
   for _, line in ipairs(statuses) do
     if line ~= "" then table.insert(lines, line) end
