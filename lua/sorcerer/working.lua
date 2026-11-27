@@ -1,5 +1,5 @@
 -- What a server is working on, drawn where it works: while scry reviews, conjure writes or
--- apprentice researches a question or runs a task, a grey `⟳ scry: reviewing…` sits at the end
+-- lackey researches a question or runs a task, a grey `⟳ scry: reviewing…` sits at the end
 -- of the line being worked on, and is gone when the work ends. The servers know the lines; they
 -- send them in the notification `sorcerer/working` (`{ units = { { uri, line, text } } }`, an
 -- empty list when done) to a client that says in its init_options that it draws them. An
@@ -24,7 +24,7 @@ function M.set_highlights()
   vim.api.nvim_set_hl(0, "SorcererWorking", { link = "Comment", default = true })
 end
 
--- `⟳ apprentice: researching…` with the spinning frame in place of the `⟳`; text without a
+-- `⟳ lackey: researching…` with the spinning frame in place of the `⟳`; text without a
 -- leading `⟳` is drawn as sent.
 local function with_frame(text)
   local rest = text:match("^⟳%s*(.*)$")

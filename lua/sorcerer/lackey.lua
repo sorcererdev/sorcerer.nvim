@@ -1,10 +1,10 @@
--- apprentice's language server: `apprentice lsp`, a coding agent whose whole interface is the
+-- lackey's language server: `lackey lsp`, a coding agent whose whole interface is the
 -- editor (a prototype). It answers and checks what you write, offers what you ask for, and runs
 -- a task in your buffers when you accept: every change lands through `workspace/applyEdit`,
 -- undoable. Like conjure it needs, from this client:
 --   * `debounce_text_changes = 0`: Neovim sends `didChange` at once, so a task's write never
 --     lands over what you typed a moment ago, and your edits reach the agent after its next tool;
---   * apprentice attached to every buffer under the project root (a file a task opens included).
+--   * lackey attached to every buffer under the project root (a file a task opens included).
 -- It draws three notifications the server sends only to a client that lists them in
 -- `init_options.handles`:
 --   * `sorcerer/ghost` { uri, line (from 0), lines }: grey lines below `line` (`virt_lines`),
@@ -20,7 +20,7 @@ M.ghost_ns = vim.api.nvim_create_namespace("sorcerer_ghost")
 M.handled = { "sorcerer/ghost", "sorcerer/note", "sorcerer/showDiff" }
 
 local opts = nil
--- the work apprentice reports: token -> message, and the token that spoke last
+-- the work lackey reports: token -> message, and the token that spoke last
 local work, latest = {}, nil
 -- the ghosts drawn: buf -> { [line] = extmark id }
 local ghosts = {}
@@ -29,7 +29,7 @@ function M.root(buf)
   return vim.fs.root(buf, ".sorcerer") or vim.fs.root(buf, ".git")
 end
 
--- The client config apprentice adds to sorcerer/working's: the notifications it handles.
+-- The client config lackey adds to sorcerer/working's: the notifications it handles.
 function M.client_config()
   local config = require("sorcerer.working").client_config()
   config.init_options.handles = vim.deepcopy(M.handled)
@@ -41,21 +41,21 @@ function M.client_config()
   return config
 end
 
--- Attach apprentice to buffer BUF when it is enabled and BUF names a file (on disk or not yet,
+-- Attach lackey to buffer BUF when it is enabled and BUF names a file (on disk or not yet,
 -- but no other scheme) under a project root.
 function M.attach(buf)
   if not opts or not opts.enabled then return end
   if not vim.api.nvim_buf_is_valid(buf) or vim.bo[buf].buftype ~= "" then return end
   local name = vim.api.nvim_buf_get_name(buf)
-  -- a file need not be on disk yet: a file apprentice's edit creates is only a buffer in Neovim
-  -- (CreateFile with ignoreIfExists writes nothing), and apprentice must see it to check it landed
+  -- a file need not be on disk yet: a file lackey's edit creates is only a buffer in Neovim
+  -- (CreateFile with ignoreIfExists writes nothing), and lackey must see it to check it landed
   if name == "" or name:match("^%a[%w+.-]*://") then return end
   local root = M.root(buf)
   if not root then return end
-  if not require("sorcerer.program").runnable("apprentice", opts.cmd) then return end
+  if not require("sorcerer.program").runnable("lackey", opts.cmd) then return end
   vim.lsp.start(
     vim.tbl_extend("error", {
-      name = "apprentice",
+      name = "lackey",
       cmd = opts.cmd,
       root_dir = root,
       flags = { debounce_text_changes = 0 },
@@ -130,21 +130,21 @@ function M.show_diff(result)
   vim.api.nvim_buf_set_lines(scratch, 0, -1, false, before)
   vim.bo[scratch].modifiable = false
   vim.bo[scratch].filetype = filetype
-  pcall(vim.api.nvim_buf_set_name, scratch, result.title or "apprentice: before")
+  pcall(vim.api.nvim_buf_set_name, scratch, result.title or "lackey: before")
   vim.cmd("diffthis")
   vim.api.nvim_set_current_win(live)
   vim.cmd("diffthis")
 end
 
--- "apprentice: <message>" while a task runs, else "".
+-- "lackey: <message>" while a task runs, else "".
 function M.status()
   local message = latest and work[latest]
-  return message and ("apprentice: " .. message) or ""
+  return message and ("lackey: " .. message) or ""
 end
 
 local function follow_progress(ev)
   local client = vim.lsp.get_client_by_id(ev.data.client_id)
-  if not client or client.name ~= "apprentice" then return end
+  if not client or client.name ~= "lackey" then return end
   local params = ev.data.params or {}
   local value, token = params.value or {}, tostring(params.token)
   if value.kind == "end" then
@@ -160,12 +160,12 @@ function M.set_highlights()
   vim.api.nvim_set_hl(0, "SorcererGhost", { link = "Comment", default = true })
 end
 
--- OPTS is the `apprentice` table of setup.
+-- OPTS is the `lackey` table of setup.
 function M.setup(o)
   opts = o
   work, latest, ghosts = {}, nil, {}
   M.set_highlights()
-  local group = vim.api.nvim_create_augroup("sorcerer_apprentice", { clear = true })
+  local group = vim.api.nvim_create_augroup("sorcerer_lackey", { clear = true })
   vim.api.nvim_create_autocmd("ColorScheme", { group = group, callback = M.set_highlights })
   vim.api.nvim_create_autocmd("LspProgress", { group = group, callback = follow_progress })
   vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {

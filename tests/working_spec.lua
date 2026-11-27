@@ -90,12 +90,12 @@ describe("sorcerer.working", function()
   describe("the spinning ⟳", function()
     local id = 9001
     local function unit(buf, text)
-      return { uri = vim.uri_from_fname(vim.api.nvim_buf_get_name(buf)), line = 0, text = text or "⟳ apprentice: researching…" }
+      return { uri = vim.uri_from_fname(vim.api.nvim_buf_get_name(buf)), line = 0, text = text or "⟳ lackey: researching…" }
     end
     -- whether TEXT is one of the frames, then the unit's words
     local function spinning(text)
       for _, f in ipairs(working.frames) do
-        if text == f .. " apprentice: researching…" then return true end
+        if text == f .. " lackey: researching…" then return true end
       end
       return false
     end
@@ -147,7 +147,7 @@ describe("sorcerer.working", function()
       local buf = a_shown_buffer()
       working.show(id, { unit(buf) })
       assert.is_false(working.animating())
-      assert.equals("⟳ apprentice: researching…", drawn(buf)[1][2])
+      assert.equals("⟳ lackey: researching…", drawn(buf)[1][2])
     end)
   end)
 end)
