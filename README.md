@@ -273,9 +273,9 @@ require("sorcerer").setup({
 })
 ```
 
-**Your first offer.** In a Python or Rust file of a git repository, on a line of its own at the
-end (not inside a function), write `# Add a median(prices) function that returns the middle
-price.` and stop typing. About two seconds later a faint `lackey: I can do this · ~$0.50 ·
+**Your first offer.** In a Python file of a git repository (or any code language sorcerer ships,
+in its own comment), on a line of its own at the end (not inside a function), write `# Add a
+median(prices) function that returns the middle price.` and stop typing. About two seconds later a faint `lackey: I can do this · ~$0.50 ·
 sonnet` hint appears; `<leader>ma` runs it. A comment inside a function that describes a change
 may be read as an aside and get no offer: `<leader>ma` then says `lackey: no offer on this
 line`; put the request above the function, start it with what to do, or label the line
