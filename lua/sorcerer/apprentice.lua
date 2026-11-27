@@ -80,11 +80,15 @@ function M.ghost(result)
   ghosts[buf][line] = vim.api.nvim_buf_set_extmark(buf, M.ghost_ns, line, 0, { virt_lines = virt })
 end
 
--- Your edit of a line with a ghost under it takes the ghost away.
+-- Your edit of a line with a ghost under it takes the ghost away. The line is the cursor's in
+-- the window showing the buffer, which need not be the current window; a buffer no window
+-- shows keeps its ghosts.
 local function clear_edited_ghost(buf)
   local marks = ghosts[buf]
   if not marks then return end
-  local cursor = vim.api.nvim_win_get_cursor(0)[1] - 1
+  local win = vim.fn.bufwinid(buf)
+  if win == -1 then return end
+  local cursor = vim.api.nvim_win_get_cursor(win)[1] - 1
   local id = marks[cursor]
   if id then
     pcall(vim.api.nvim_buf_del_extmark, buf, M.ghost_ns, id)
