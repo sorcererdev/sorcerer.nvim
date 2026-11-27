@@ -1,8 +1,8 @@
--- The code-action menu: preferred quick fixes first, then quick fixes, then the rest.
+-- The code-action menu: each server's fixes together (preferred first), then the rest.
 local code_actions = require("sorcerer.code_actions")
 
-local function item(title, kind, preferred)
-  return { action = { title = title, kind = kind, isPreferred = preferred }, ctx = {} }
+local function item(title, kind, preferred, client_id)
+  return { action = { title = title, kind = kind, isPreferred = preferred }, ctx = { client_id = client_id } }
 end
 
 local function titles(items)
@@ -29,6 +29,35 @@ describe("sorcerer.code_actions", function()
     assert.same(
       { "spellbook: Use a port", "spellbook: Add a port", "Conjure here", "Conjure for this finding", "no kind" },
       titles(code_actions.ordered(menu))
+    )
+  end)
+
+  it("keeps each server's fixes together, its preferred fix first", function()
+    -- two servers each with a preferred fix: the second's must not come between the first's
+    local two = {
+      item("spellbook: Use a port", "quickfix", true, 1),
+      item("spellbook: Add a port", "quickfix", nil, 1),
+      item("Conjure here", "refactor.rewrite", nil, 2),
+      item("Ruff (I001): Organize imports", "quickfix", true, 3),
+      item("Ruff (I001): Disable for this line", "quickfix", nil, 3),
+      item("Ruff: Fix all", "source.fixAll", nil, 3),
+    }
+    assert.same({
+      "spellbook: Use a port", "spellbook: Add a port",
+      "Ruff (I001): Organize imports", "Ruff (I001): Disable for this line",
+      "Conjure here", "Ruff: Fix all",
+    }, titles(code_actions.ordered(two)))
+  end)
+
+  it("puts a server with no preferred fix after those with one", function()
+    local two = {
+      item("lint: Disable", "quickfix", nil, 3),
+      item("spellbook: Add a port", "quickfix", nil, 1),
+      item("spellbook: Use a port", "quickfix", true, 1),
+    }
+    assert.same(
+      { "spellbook: Use a port", "spellbook: Add a port", "lint: Disable" },
+      titles(code_actions.ordered(two))
     )
   end)
 

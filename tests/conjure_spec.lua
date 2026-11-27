@@ -98,6 +98,40 @@ describe("sorcerer.conjure", function()
     wait(function() return clients()[1].attached_buffers[buf] end)
   end)
 
+  -- conjure lands a new file as CreateFile with ignoreIfExists, which Neovim answers with only
+  -- a buffer (no file on disk) in a folder that may not exist yet: conjure must see that
+  -- buffer, or the change counts as not landed and offers no Undo
+  it("a file a server's edit creates is attached before it is on disk", function()
+    local root = project()
+    vim.cmd.edit(root .. "/src/a.py")
+    wait(function() return #clients() == 1 end)
+    local new = root .. "/src/ports/log/mod.rs"
+    local uri = vim.uri_from_fname(new)
+    vim.lsp.util.apply_workspace_edit({
+      documentChanges = {
+        { kind = "create", uri = uri, options = { ignoreIfExists = true } },
+        {
+          textDocument = { uri = uri, version = vim.NIL },
+          edits = { { range = { start = { line = 0, character = 0 }, ["end"] = { line = 1, character = 0 } }, newText = "pub mod log;\n" } },
+        },
+      },
+    }, "utf-16")
+    assert.is_nil(vim.uv.fs_stat(new))
+    local buf = vim.fn.bufnr(new)
+    wait(function() return clients()[1].attached_buffers[buf] end)
+  end)
+
+  it("does not attach to a buffer of another scheme", function()
+    local root = project()
+    vim.cmd.edit(root .. "/src/a.py")
+    wait(function() return #clients() == 1 end)
+    local buf = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_set_name(buf, "fugitive://" .. root .. "/.git//0/src/a.py")
+    vim.api.nvim_set_current_buf(buf)
+    vim.wait(300)
+    assert.is_nil(clients()[1].attached_buffers[buf])
+  end)
+
   it("does not attach to a nofile buffer or outside any root", function()
     vim.cmd.enew()
     vim.bo.buftype = "nofile"

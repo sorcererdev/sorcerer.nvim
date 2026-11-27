@@ -75,6 +75,24 @@ describe("sorcerer.apprentice", function()
     wait(function() return c.attached_buffers[hidden] end)
   end)
 
+  it("attaches to a file its edit creates before it is on disk", function()
+    local root, c = started()
+    local new = root .. "/src/late/lateness.py"
+    local uri = vim.uri_from_fname(new)
+    vim.lsp.util.apply_workspace_edit({
+      documentChanges = {
+        { kind = "create", uri = uri, options = { ignoreIfExists = true } },
+        {
+          textDocument = { uri = uri, version = vim.NIL },
+          edits = { { range = { start = { line = 0, character = 0 }, ["end"] = { line = 1, character = 0 } }, newText = "x = 1\n" } },
+        },
+      },
+    }, "utf-16")
+    assert.is_nil(vim.uv.fs_stat(new))
+    local buf = vim.fn.bufnr(new)
+    wait(function() return c.attached_buffers[buf] end)
+  end)
+
   it("draws ghost lines under a line and takes them away", function()
     local root, c = started()
     local uri = vim.uri_from_fname(root .. "/src/a.py")
