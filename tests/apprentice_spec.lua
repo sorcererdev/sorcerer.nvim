@@ -66,6 +66,8 @@ describe("sorcerer.apprentice", function()
     assert.equals(0, c.config.flags.debounce_text_changes)
     assert.equals(true, c.config.init_options.drawsWorking)
     assert.same({ "sorcerer/ghost", "sorcerer/note", "sorcerer/showDiff" }, c.config.init_options.handles)
+    -- the open-answer key, so a long answer's mark names it
+    assert.same({ openAnswer = "<leader>mo" }, c.config.init_options.keys)
   end)
 
   it("attaches to every buffer under the root", function()
