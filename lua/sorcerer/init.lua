@@ -38,6 +38,9 @@ M.defaults = {
     -- how a hole and a rule finding look in the margin; false gives Neovim's own display back
     signs = { hole = "◇", rule = "≡" },
   },
+  -- the grey `⟳ … working` text at the end of a line a server works on: its `⟳` spins (one
+  -- 90 ms timer while anything is drawn); false keeps it still
+  working = { animate = true },
   -- the code-action menu lists the preferred quick fixes first (a spellbook rule's fix), then the
   -- other quick fixes, then the rest, as VS Code does; false leaves Neovim's order
   fixes_first = true,
@@ -45,8 +48,8 @@ M.defaults = {
   -- `false`, to bind nothing (or that one). A lhs you already mapped is skipped.
   keys = {
     prefix = "<leader>m", new = "n", fix = "f", conjure = "c", undo = "u", try_harder = "t", why = "w", check = "k", sync = "s",
-    -- apprentice: do this, stop, show diff, undo the task, journal, dismiss, label
-    ["do"] = "a", stop = "q", diff = "d", undo_task = "z", journal = "j", dismiss = "x", label = "l",
+    -- apprentice: do this, stop, show diff, undo the task, journal, dismiss, label, open the answer
+    ["do"] = "a", stop = "q", diff = "d", undo_task = "z", journal = "j", dismiss = "x", label = "l", open_answer = "o",
   },
 }
 
@@ -59,12 +62,13 @@ function M.setup(opts)
   if opts and opts.spellbook and opts.spellbook.hole_keys == false then M.opts.spellbook.hole_keys = false end
   if opts and opts.conjure and opts.conjure.sign == false then M.opts.conjure.sign = false end
   require("sorcerer.signs").setup(M.opts.scry, M.opts)
-  require("sorcerer.working").setup()
+  require("sorcerer.working").setup(M.opts.working)
+  -- the keys before the servers start: apprentice tells its server the open-answer key
+  require("sorcerer.keys").setup(M.opts)
   require("sorcerer.scry").setup(M.opts.scry)
   require("sorcerer.conjure").setup(M.opts.conjure)
   require("sorcerer.spellbook").setup(M.opts.spellbook)
   require("sorcerer.apprentice").setup(M.opts.apprentice)
-  require("sorcerer.keys").setup(M.opts)
   require("sorcerer.code_actions").setup(M.opts.fixes_first)
 end
 

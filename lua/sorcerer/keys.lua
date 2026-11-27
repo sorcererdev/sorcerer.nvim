@@ -1,6 +1,6 @@
 -- sorcerer's keys, all under one prefix (`<leader>m`): conjure here, undo, try harder, why,
 -- `:Spellbook new`, `:Spellbook fix`, `:Spellbook sync` and `:Spellbook check`, and apprentice's do this, stop,
--- show diff, undo the task, journal, dismiss and label. Each runs the same code action the server offers,
+-- show diff, undo the task, journal, dismiss, label and open the answer. Each runs the same code action the server offers,
 -- so a line offers exactly what it did before. A key you already mapped is never overwritten:
 -- it is skipped and `:checkhealth sorcerer` lists it. `keys = false` binds nothing.
 local M = {}
@@ -21,6 +21,7 @@ local table_of_keys = {
   { name = "undo_task", modes = { "n" }, tool = "apprentice", title = "apprentice: Undo this task", desc = "sorcerer: undo apprentice's task" },
   { name = "journal", modes = { "n" }, tool = "apprentice", title = "apprentice: Show journal", desc = "sorcerer: apprentice's journal of the task" },
   { name = "dismiss", modes = { "n" }, tool = "apprentice", title = "apprentice: Dismiss", desc = "sorcerer: dismiss apprentice's mark" },
+  { name = "open_answer", modes = { "n" }, tool = "apprentice", title = "apprentice: Open the answer", desc = "sorcerer: open apprentice's whole answer" },
   { name = "label", modes = { "n" }, tool = "apprentice", title = "apprentice: this was", prefix = true, choose = true, desc = "sorcerer: label what this line was" },
 }
 

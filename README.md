@@ -78,8 +78,10 @@ A failed review ends with `review failed, see "scry log"`, shown by your own pro
 
 ## Work in progress
 
-While scry reviews or conjure writes, grey text sits at the end of the first line of each unit
-being worked on: `⟳ scry: reviewing…`, `⟳ conjure: writing…`. It is drawn from the server's
+While scry reviews, conjure writes or apprentice researches a question or runs a task, grey text
+sits at the end of the line being worked on: `⟳ scry: reviewing…`, `⟳ conjure: writing…`,
+`⟳ apprentice: researching…`. Its `⟳` spins (one 90 ms timer while anything is drawn, redrawing
+only buffers a window shows); `working = { animate = false }` in setup keeps it still. It is drawn from the server's
 `sorcerer/working` notification (the plugin tells the server at start that it draws it), moves
 with the line as you edit, and goes when the work ends or the server exits. Its highlight is
 `SorcererWorking` (linked to `Comment`; set your own to change it). The status line stays.
@@ -257,6 +259,7 @@ notes in a vertical split beside your code, and the diff view. Its keys:
 | key | does |
 |---|---|
 | `<leader>ma` | **apprentice: do this** on the line (whatever its price) |
+| `<leader>mo` | **apprentice: Open the answer**: a long answer, beside your code (none opens unasked) |
 | `<leader>mq` | **apprentice: Stop this task** (q for quit; `s` is spellbook sync) |
 | `<leader>md` | **apprentice: Show diff** |
 | `<leader>mz` | **apprentice: Undo this task** |

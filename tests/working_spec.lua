@@ -58,7 +58,7 @@ describe("sorcerer.working", function()
   it("draws grey text at the end of the unit's first line, and clears it when the review ends", function()
     save_a_file()
     wait(function() return #drawn() == 1 end)
-    assert.same({ { 0, "⟳ scry: reviewing…", "SorcererWorking", "eol" } }, drawn())
+    assert.same({ { 0, "⠋ scry: reviewing…", "SorcererWorking", "eol" } }, drawn())
     assert.equals("Comment", vim.api.nvim_get_hl(0, { name = "SorcererWorking", link = true }).link)
     wait(function() return #drawn() == 0 end)
   end)
@@ -85,5 +85,69 @@ describe("sorcerer.working", function()
     local other = root .. "/src/other.py"
     working.show(clients()[1].id, { { uri = vim.uri_from_fname(other), line = 0, text = "x" } })
     assert.equals(-1, vim.fn.bufnr(other))
+  end)
+
+  describe("the spinning ⟳", function()
+    local id = 9001
+    local function unit(buf, text)
+      return { uri = vim.uri_from_fname(vim.api.nvim_buf_get_name(buf)), line = 0, text = text or "⟳ apprentice: researching…" }
+    end
+    -- whether TEXT is one of the frames, then the unit's words
+    local function spinning(text)
+      for _, f in ipairs(working.frames) do
+        if text == f .. " apprentice: researching…" then return true end
+      end
+      return false
+    end
+    local function a_shown_buffer()
+      local root = project()
+      vim.cmd.edit(root .. "/src/a.py")
+      return vim.api.nvim_get_current_buf()
+    end
+    after_each(function()
+      working.clear(id)
+      working.setup({ animate = true })
+    end)
+
+    it("starts a timer with the first mark, cycles the frames, and stops with the last", function()
+      local buf = a_shown_buffer()
+      assert.is_false(working.animating())
+      working.show(id, { unit(buf) })
+      assert.is_true(working.animating())
+      local first = drawn(buf)[1][2]
+      assert.is_true(spinning(first), first)
+      wait(function() return drawn(buf)[1][2] ~= first end, 1000)
+      assert.is_true(spinning(drawn(buf)[1][2]))
+      working.show(id, {})
+      assert.is_false(working.animating())
+      assert.same({}, drawn(buf))
+    end)
+
+    it("one timer serves every client, and runs until the last client's marks go", function()
+      local buf = a_shown_buffer()
+      working.show(id, { unit(buf) })
+      working.show(id + 1, { unit(buf, "⟳ scry: reviewing…") })
+      working.clear(id)
+      assert.is_true(working.animating())
+      working.clear(id + 1)
+      assert.is_false(working.animating())
+    end)
+
+    it("leaves a hidden buffer's mark as it is", function()
+      local buf = a_shown_buffer()
+      working.show(id, { unit(buf) })
+      vim.cmd("enew")
+      local hidden = drawn(buf)[1][2]
+      vim.wait(400)
+      assert.equals(hidden, drawn(buf)[1][2])
+    end)
+
+    it("animate = false keeps the ⟳ and runs no timer", function()
+      working.setup({ animate = false })
+      local buf = a_shown_buffer()
+      working.show(id, { unit(buf) })
+      assert.is_false(working.animating())
+      assert.equals("⟳ apprentice: researching…", drawn(buf)[1][2])
+    end)
   end)
 end)
