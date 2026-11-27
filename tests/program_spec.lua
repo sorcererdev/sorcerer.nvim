@@ -31,6 +31,7 @@ describe("a missing program", function()
     assert.equals(vim.log.levels.WARN, warnings[1].level)
     local both = warnings[1].msg .. warnings[2].msg
     assert.truthy(both:find("`sorcerer-no-such-scry` is not on the path", 1, true))
+    assert.truthy(both:find("scry = { enabled = false }", 1, true))
     assert.truthy(both:find("scry.cmd", 1, true))
     assert.truthy(both:find("sorcerer-scry-installer", 1, true))
     assert.truthy(both:find("conjure.cmd", 1, true))

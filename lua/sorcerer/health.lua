@@ -13,7 +13,7 @@ local function check_lackey()
   vim.health.start("sorcerer: lackey")
   local exe = (lackey.cmd or { "lackey", "lsp" })[1]
   if vim.fn.executable(exe) == 0 then
-    vim.health.error(("`%s` is not on the path"):format(exe), { "install it: " .. lackey_install, "or set lackey.cmd in setup()" })
+    vim.health.error(("`%s` is not on the path"):format(exe), { "install it: " .. lackey_install, "or set lackey.cmd in setup()", "or turn it off: lackey = { enabled = false } in setup()" })
     return
   end
   local out = vim.fn.system({ exe, "--version" })
@@ -32,7 +32,7 @@ local function check_conjure()
   vim.health.start("sorcerer: conjure")
   local exe = (conjure.cmd or { "conjure", "lsp" })[1]
   if vim.fn.executable(exe) == 0 then
-    vim.health.error(("`%s` is not on the path"):format(exe), { "install it: " .. conjure_install, "or set conjure.cmd in setup()" })
+    vim.health.error(("`%s` is not on the path"):format(exe), { "install it: " .. conjure_install, "or set conjure.cmd in setup()", "or turn it off: conjure = { enabled = false } in setup()" })
     return
   end
   local out = vim.fn.system({ exe, "--version" })
@@ -51,7 +51,7 @@ local function check_spellbook()
   vim.health.start("sorcerer: spellbook")
   local exe = (spellbook.cmd or { "spellbook", "lsp" })[1]
   if vim.fn.executable(exe) == 0 then
-    vim.health.error(("`%s` is not on the path"):format(exe), { "install it: " .. spellbook_install, "or set spellbook.cmd in setup()" })
+    vim.health.error(("`%s` is not on the path"):format(exe), { "install it: " .. spellbook_install, "or set spellbook.cmd in setup()", "or turn it off: spellbook = { enabled = false } in setup()" })
     return
   end
   local out = vim.fn.system({ exe, "--version" })
@@ -75,17 +75,17 @@ local function check_keys()
   end
 end
 
-function M.check()
-  check_keys()
-  vim.health.start("sorcerer")
-  if vim.fn.has("nvim-0.10") == 0 then vim.health.error("Neovim 0.10 or newer is needed") else vim.health.ok("Neovim " .. tostring(vim.version())) end
-  local cmd = ((require("sorcerer").opts or require("sorcerer").defaults).scry or {}).cmd or { "scry", "lsp" }
-  local exe = cmd[1]
+-- scry, in the main section: off (`scry = { enabled = false }`) is said, not an error, so a
+-- lackey-only setup checks clean.
+local function check_scry()
+  local scry = (require("sorcerer").opts or require("sorcerer").defaults).scry or {}
+  if scry.enabled == false then
+    vim.health.info("scry is off (scry = { enabled = false })")
+    return
+  end
+  local exe = (scry.cmd or { "scry", "lsp" })[1]
   if vim.fn.executable(exe) == 0 then
-    vim.health.error(("`%s` is not on the path"):format(exe), { "install it: " .. install, "or set scry.cmd in setup()" })
-    check_conjure()
-    check_spellbook()
-    check_lackey()
+    vim.health.error(("`%s` is not on the path"):format(exe), { "install it: " .. install, "or set scry.cmd in setup()", "or turn it off: scry = { enabled = false } in setup()" })
     return
   end
   local out = vim.fn.system({ exe, "--version" })
@@ -95,6 +95,13 @@ function M.check()
   end
   vim.health.ok(("%s found: %s"):format(exe, vim.trim(out)))
   vim.health.info('"scry doctor" in a project checks the keys and the models')
+end
+
+function M.check()
+  check_keys()
+  vim.health.start("sorcerer")
+  if vim.fn.has("nvim-0.10") == 0 then vim.health.error("Neovim 0.10 or newer is needed") else vim.health.ok("Neovim " .. tostring(vim.version())) end
+  check_scry()
   check_conjure()
   check_spellbook()
   check_lackey()
