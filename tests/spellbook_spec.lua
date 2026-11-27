@@ -458,14 +458,15 @@ describe("sorcerer.spellbook hole session", function()
     close_floats()
   end)
 
-  -- run the plan float's apply over a canned reply with STOPS; SETUP is the spellbook table
-  local function apply_with(reply_stops, setup)
+  -- run the plan float's apply over a canned reply with STOPS; SETUP is the spellbook table;
+  -- REPLY_HOLES the reply's holes (the plan's by default)
+  local function apply_with(reply_stops, setup, reply_holes)
     replies({
       ["spellbook.generators"] = generators,
       ["spellbook.choices_app"] = { choices = { "bistro" } },
       ["spellbook.plan"] = plan,
       ["spellbook.apply"] = {
-        written = { CMD, CMD_TEST }, skipped = {}, holes = plan.holes,
+        written = { CMD, CMD_TEST }, skipped = {}, holes = reply_holes or plan.holes,
         first = { file = CMD, line = 2 }, stops = reply_stops,
       },
     })
@@ -500,6 +501,23 @@ describe("sorcerer.spellbook hole session", function()
     assert.equals("s", vim.fn.mode())
     assert.equals("todo_field", selected())
     assert.equals("hole 1 of 3 · field: its first input · type to replace · <Tab> next", echoed[#echoed])
+  end)
+
+  it("the end line is said when the session starts, before the hole's message", function()
+    apply_with(stops)
+    wait(function() return holes.active(vim.api.nvim_get_current_buf()) end)
+    flush()
+    assert.same({ "spellbook: wrote 2 files" }, messages)
+    assert.truthy(echoed[#echoed]:find("^hole 1 of 3"))
+  end)
+
+  it("a reply whose plan has no hole to fill starts no session, whatever its stops", function()
+    apply_with(stops, nil, {})
+    wait(function() return #messages > 0 end)
+    flush()
+    assert.is_false(holes.active(vim.api.nvim_get_current_buf()))
+    assert.equals("n", vim.fn.mode())
+    assert.equals("spellbook: wrote 2 files", messages[#messages])
   end)
 
   it("typing replaces the placeholder, <Tab> and <S-Tab> move between holes", function()
@@ -852,6 +870,27 @@ describe("sorcerer.spellbook :Spellbook fix", function()
     assert.is_true(answered)
     vim.api.nvim_buf_call(buf, function() vim.cmd("silent undo") end)
     assert.same({ "def f(x):", "    pass", "" }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+  end)
+
+  it("a fix that leaves a hole says its end line and starts the session on that hole", function()
+    start({
+      ["spellbook.apply"] = {
+        changed = { FIXED }, written = {}, skipped = {}, refused = vim.NIL,
+        holes = { { name = "port_call", kind = "block", instruction = "call the port", source = "placeholder", places = {} } },
+        first = { file = FIXED, line = 2 },
+        stops = { { file = FIXED, generation = "fx12", name = "port_call", kind = "block", instruction = "call the port",
+          range = { start = { line = 1, character = 4 }, ["end"] = { line = 1, character = 10 } } } },
+      },
+    })
+    pickers({ 1 })
+    local buf = vim.api.nvim_get_current_buf()
+    vim.fn.maparg("<leader>mf", "n", false, true).callback()
+    press(plan_float(), "<CR>")
+    local holes = require("sorcerer.spellbook_holes")
+    wait(function() return holes.active(buf) end)
+    assert.equals("spellbook: fixed commands-use-ports in a.py · changed 1 file", messages[#messages])
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
+    holes.stop(buf)
   end)
 
   it("a buffer with unsaved changes is refused, by name, and nothing is planned", function()
