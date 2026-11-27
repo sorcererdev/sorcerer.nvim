@@ -895,6 +895,18 @@ describe("sorcerer.spellbook :Spellbook fix", function()
     holes.stop(buf)
   end)
 
+  it("the end line names a changed file no window shows, since it is left unsaved", function()
+    start({
+      ["spellbook.apply"] = { changed = { FIXED, "src/a_test.py" }, written = {}, skipped = {}, refused = vim.NIL,
+        holes = {}, first = vim.NIL, stops = {} },
+    })
+    pickers({ 1 })
+    vim.fn.maparg("<leader>mf", "n", false, true).callback()
+    press(plan_float(), "<CR>")
+    wait(function() return #messages > 0 end)
+    assert.equals("spellbook: fixed commands-use-ports in a.py · changed 2 files · a_test.py not shown, unsaved", messages[#messages])
+  end)
+
   it("a buffer with unsaved changes is refused, by name, and nothing is planned", function()
     start()
     vim.api.nvim_buf_set_lines(0, 0, 1, false, { "def g(x):" })

@@ -187,7 +187,8 @@ float: a changed file is `~ path (+3 −1)` with its hunks below, `+` lines in `
 in `DiffDelete`; a new file is `+ path` as in `new`. `<CR>` applies: the server's own
 `workspace/applyEdit` lands through Neovim's handler, so `u` in each buffer takes it back (the
 changed buffers are left modified; `:wa` saves them), and the new files are written. The end line
-says `spellbook: fixed commands-use-ports in close_table.py · changed 2 files · wrote 4 files`. If
+says `spellbook: fixed commands-use-ports in close_table.py · changed 2 files · wrote 4 files`; a
+changed file no window shows is named (`· close_table__test.py not shown, unsaved`). If
 the file changed since the plan, nothing is applied and you are told.
 
 **Owned regions.** A project's `.sorcerer/spellbook/regions.toml` names the lists spellbook
