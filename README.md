@@ -50,8 +50,8 @@ require("sorcerer").setup({
   },
   -- conjure (below) is off until you turn it on
   conjure = { enabled = false, cmd = { "conjure", "lsp" } },
-  -- apprentice (below) too
-  apprentice = { enabled = false, cmd = { "apprentice", "lsp" } },
+  -- lackey (below) too
+  lackey = { enabled = false, cmd = { "lackey", "lsp" } },
 })
 ```
 
@@ -78,9 +78,9 @@ A failed review ends with `review failed, see "scry log"`, shown by your own pro
 
 ## Work in progress
 
-While scry reviews, conjure writes or apprentice researches a question or runs a task, grey text
+While scry reviews, conjure writes or lackey researches a question or runs a task, grey text
 sits at the end of the line being worked on: `⟳ scry: reviewing…`, `⟳ conjure: writing…`,
-`⟳ apprentice: researching…`. Its `⟳` spins (one 90 ms timer while anything is drawn, redrawing
+`⟳ lackey: researching…`. Its `⟳` spins (one 90 ms timer while anything is drawn, redrawing
 only buffers a window shows); `working = { animate = false }` in setup keeps it still. It is drawn from the server's
 `sorcerer/working` notification (the plugin tells the server at start that it draws it), moves
 with the line as you edit, and goes when the work ends or the server exits. Its highlight is
@@ -230,44 +230,44 @@ buffer-local map you had on those keys is put back at the end. No session runs w
 The project must be trusted (`spellbook trust`) when its own config runs code.
 `:checkhealth sorcerer` checks that `spellbook` is found when it is enabled.
 
-## Apprentice
+## Lackey
 
-[apprentice](https://github.com/sorcererdev/sorcerer) is a coding agent whose whole interface is
+[lackey](https://github.com/sorcererdev/sorcerer) is a coding agent whose whole interface is
 your editor: no chat. It is a **prototype**, built from source and not released:
-`cargo install --git https://github.com/sorcererdev/sorcerer sorcerer-apprentice`. It needs
+`cargo install --git https://github.com/sorcererdev/sorcerer sorcerer-lackey`. It needs
 `claude` (Claude Code, signed in) for tasks and `JEV_API_KEY` for reading what you write;
-`apprentice doctor` in a project checks both. Turn it on:
+`lackey doctor` in a project checks both. Turn it on:
 
 ```lua
-require("sorcerer").setup({ apprentice = { enabled = true } })
+require("sorcerer").setup({ lackey = { enabled = true } })
 ```
 
-Write in your code: a comment, a sentence in a docstring, an empty body. On idle apprentice asks
+Write in your code: a comment, a sentence in a docstring, an empty body. On idle lackey asks
 Jev what it is; on save it answers a question or checks a claim, in the margin (source
-`apprentice`), and an instruction is offered as the code action `apprentice: do this · ~$0.50 ·
+`lackey`), and an instruction is offered as the code action `lackey: do this · ~$0.50 ·
 sonnet`. Accepting runs a task: its changes land in your buffers (unsaved, `u` undoes them), the
 status line says what it does, a question it asks is choices on a line or a list, and at the end
-a `✦ apprentice: …` mark on each changed file offers **Show diff** (the file before the task
+a `✦ lackey: …` mark on each changed file offers **Show diff** (the file before the task
 against now, side by side in diff mode in a tab of its own; `:tabclose` ends it), **Undo this task** and **Show journal**. Saving every
 file it changed keeps the task.
 
-The plugin starts `apprentice lsp` with `debounce_text_changes = 0` and on every buffer under the
+The plugin starts `lackey lsp` with `debounce_text_changes = 0` and on every buffer under the
 root, as for conjure, and draws what the server sends only to it: grey suggested lines under a
 line (`SorcererGhost`, linked to `Comment`; gone at your next edit of the line), the agent's
 notes in a vertical split beside your code, and the diff view. Its keys:
 
 | key | does |
 |---|---|
-| `<leader>ma` | **apprentice: do this** on the line (whatever its price) |
-| `<leader>mo` | **apprentice: Open the answer**: a long answer, beside your code (none opens unasked) |
-| `<leader>mq` | **apprentice: Stop this task** (q for quit; `s` is spellbook sync) |
-| `<leader>md` | **apprentice: Show diff** |
-| `<leader>mz` | **apprentice: Undo this task** |
-| `<leader>mj` | **apprentice: Show journal** |
-| `<leader>mx` | **apprentice: Dismiss** a mark |
+| `<leader>ma` | **lackey: do this** on the line (whatever its price) |
+| `<leader>mo` | **lackey: Open the answer**: a long answer, beside your code (none opens unasked) |
+| `<leader>mq` | **lackey: Stop this task** (q for quit; `s` is spellbook sync) |
+| `<leader>md` | **lackey: Show diff** |
+| `<leader>mz` | **lackey: Undo this task** |
+| `<leader>mj` | **lackey: Show journal** |
+| `<leader>mx` | **lackey: Dismiss** a mark |
 | `<leader>ml` | label the line: what it really was (a question, a claim, an instruction, nothing) |
 
-`require("sorcerer").status()` says `apprentice: <task> · <what it does> · $0.12` while a task
+`require("sorcerer").status()` says `lackey: <task> · <what it does> · $0.12` while a task
 runs.
 
 ## Tests

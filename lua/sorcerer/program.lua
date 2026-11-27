@@ -15,7 +15,7 @@ M.install = {
   -- no installer is published for it yet
   spellbook = "cargo install --git https://github.com/sorcererdev/sorcerer sorcerer-spellbook",
   -- a prototype: built from source, not released
-  apprentice = "cargo install --git https://github.com/sorcererdev/sorcerer sorcerer-apprentice",
+  lackey = "cargo install --git https://github.com/sorcererdev/sorcerer sorcerer-lackey",
 }
 
 -- program -> true when it was found, false when it was missing (and said so)
@@ -26,7 +26,7 @@ function M.forget()
   checked = {}
 end
 
--- True when the program NAME ("scry", "conjure", "spellbook" or "apprentice") can run as CMD's first word. The first
+-- True when the program NAME ("scry", "conjure", "spellbook" or "lackey") can run as CMD's first word. The first
 -- time it cannot, warn once; every later call answers from the first.
 function M.runnable(name, cmd)
   if checked[name] ~= nil then return checked[name] end

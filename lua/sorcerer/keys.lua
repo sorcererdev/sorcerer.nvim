@@ -1,5 +1,5 @@
 -- sorcerer's keys, all under one prefix (`<leader>m`): conjure here, undo, try harder, why,
--- `:Spellbook new`, `:Spellbook fix`, `:Spellbook sync` and `:Spellbook check`, and apprentice's do this, stop,
+-- `:Spellbook new`, `:Spellbook fix`, `:Spellbook sync` and `:Spellbook check`, and lackey's do this, stop,
 -- show diff, undo the task, journal, dismiss, label and open the answer. Each runs the same code action the server offers,
 -- so a line offers exactly what it did before. A key you already mapped is never overwritten:
 -- it is skipped and `:checkhealth sorcerer` lists it. `keys = false` binds nothing.
@@ -15,14 +15,14 @@ local table_of_keys = {
   { name = "fix", modes = { "n" }, tool = "spellbook", fix = true, desc = "sorcerer: apply the finding's fix" },
   { name = "check", modes = { "n" }, tool = "spellbook", cmd = "Spellbook check", desc = "sorcerer: check the project's rules" },
   { name = "sync", modes = { "n" }, tool = "spellbook", cmd = "Spellbook sync", desc = "sorcerer: sync the owned regions" },
-  { name = "do", modes = { "n" }, tool = "apprentice", title = "apprentice: do this", prefix = true, desc = "sorcerer: apprentice, do this" },
-  { name = "stop", modes = { "n" }, tool = "apprentice", title = "apprentice: Stop this task", desc = "sorcerer: stop apprentice's task" },
-  { name = "diff", modes = { "n" }, tool = "apprentice", title = "apprentice: Show diff", desc = "sorcerer: the task's diff of this file" },
-  { name = "undo_task", modes = { "n" }, tool = "apprentice", title = "apprentice: Undo this task", desc = "sorcerer: undo apprentice's task" },
-  { name = "journal", modes = { "n" }, tool = "apprentice", title = "apprentice: Show journal", desc = "sorcerer: apprentice's journal of the task" },
-  { name = "dismiss", modes = { "n" }, tool = "apprentice", title = "apprentice: Dismiss", desc = "sorcerer: dismiss apprentice's mark" },
-  { name = "open_answer", modes = { "n" }, tool = "apprentice", title = "apprentice: Open the answer", desc = "sorcerer: open apprentice's whole answer" },
-  { name = "label", modes = { "n" }, tool = "apprentice", title = "apprentice: this was", prefix = true, choose = true, desc = "sorcerer: label what this line was" },
+  { name = "do", modes = { "n" }, tool = "lackey", title = "lackey: do this", prefix = true, desc = "sorcerer: lackey, do this" },
+  { name = "stop", modes = { "n" }, tool = "lackey", title = "lackey: Stop this task", desc = "sorcerer: stop lackey's task" },
+  { name = "diff", modes = { "n" }, tool = "lackey", title = "lackey: Show diff", desc = "sorcerer: the task's diff of this file" },
+  { name = "undo_task", modes = { "n" }, tool = "lackey", title = "lackey: Undo this task", desc = "sorcerer: undo lackey's task" },
+  { name = "journal", modes = { "n" }, tool = "lackey", title = "lackey: Show journal", desc = "sorcerer: lackey's journal of the task" },
+  { name = "dismiss", modes = { "n" }, tool = "lackey", title = "lackey: Dismiss", desc = "sorcerer: dismiss lackey's mark" },
+  { name = "open_answer", modes = { "n" }, tool = "lackey", title = "lackey: Open the answer", desc = "sorcerer: open lackey's whole answer" },
+  { name = "label", modes = { "n" }, tool = "lackey", title = "lackey: this was", prefix = true, choose = true, desc = "sorcerer: label what this line was" },
 }
 
 local bound, skipped = {}, {}

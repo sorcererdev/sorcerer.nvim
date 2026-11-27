@@ -1,14 +1,14 @@
--- apprentice in Neovim: opt-in, one client a root named `apprentice`, attached to every buffer
+-- lackey in Neovim: opt-in, one client a root named `lackey`, attached to every buffer
 -- under the root with `debounce_text_changes = 0`, announcing the notifications it draws, and
 -- drawing them: ghost lines, a note beside the code, a diff against the text before; the keys;
--- the status line. The fake `apprentice lsp` is the fake-lsp.
+-- the status line. The fake `lackey lsp` is the fake-lsp.
 local sorcerer = require("sorcerer")
-local apprentice = require("sorcerer.apprentice")
+local lackey = require("sorcerer.lackey")
 local keys = require("sorcerer.keys")
 local fake = vim.fn.fnamemodify("tests/fake-lsp", ":p")
 
 local function wait(pred, ms) assert(vim.wait(ms or 5000, pred, 10), "timed out") end
-local function clients() return vim.lsp.get_clients({ name = "apprentice" }) end
+local function clients() return vim.lsp.get_clients({ name = "lackey" }) end
 
 local function project()
   local root = vim.fn.resolve(vim.fn.tempname())
@@ -35,15 +35,15 @@ local function started()
   return root, clients()[1]
 end
 
-describe("sorcerer.apprentice", function()
+describe("sorcerer.lackey", function()
   before_each(function()
     stop_all()
     unmap_all()
     vim.cmd("silent! %bwipeout!")
     vim.cmd("silent! only")
     vim.env.FAKE_LSP_LOG = vim.fn.tempname()
-    vim.env.FAKE_LSP_NAME = "apprentice"
-    sorcerer.setup({ scry = { enabled = false }, apprentice = { enabled = true, cmd = { fake, "lsp" } } })
+    vim.env.FAKE_LSP_NAME = "lackey"
+    sorcerer.setup({ scry = { enabled = false }, lackey = { enabled = true, cmd = { fake, "lsp" } } })
   end)
   after_each(function()
     vim.env.FAKE_LSP_NAME = nil
@@ -57,7 +57,7 @@ describe("sorcerer.apprentice", function()
     vim.cmd.edit(root .. "/src/a.py")
     vim.wait(300)
     assert.equals(0, #clients())
-    assert.is_false(sorcerer.defaults.apprentice.enabled)
+    assert.is_false(sorcerer.defaults.lackey.enabled)
   end)
 
   it("starts on a root with debounce 0 and says what it draws", function()
@@ -99,12 +99,12 @@ describe("sorcerer.apprentice", function()
     local root, c = started()
     local uri = vim.uri_from_fname(root .. "/src/a.py")
     c.handlers["sorcerer/ghost"](nil, { uri = uri, line = 0, lines = { "    return x", "# done" } }, { client_id = c.id })
-    local marks = vim.api.nvim_buf_get_extmarks(0, apprentice.ghost_ns, 0, -1, { details = true })
+    local marks = vim.api.nvim_buf_get_extmarks(0, lackey.ghost_ns, 0, -1, { details = true })
     assert.equals(1, #marks)
     assert.equals("    return x", marks[1][4].virt_lines[1][1][1])
     assert.equals("# done", marks[1][4].virt_lines[2][1][1])
     c.handlers["sorcerer/ghost"](nil, { uri = uri, line = 0, lines = {} }, { client_id = c.id })
-    assert.same({}, vim.api.nvim_buf_get_extmarks(0, apprentice.ghost_ns, 0, -1, {}))
+    assert.same({}, vim.api.nvim_buf_get_extmarks(0, lackey.ghost_ns, 0, -1, {}))
   end)
 
   it("an edit of the line takes its ghost away", function()
@@ -114,7 +114,7 @@ describe("sorcerer.apprentice", function()
     vim.api.nvim_win_set_cursor(0, { 1, 0 })
     vim.api.nvim_buf_set_lines(0, 0, 1, false, { "def g(x):" })
     vim.api.nvim_exec_autocmds("TextChanged", { buffer = 0 })
-    assert.same({}, vim.api.nvim_buf_get_extmarks(0, apprentice.ghost_ns, 0, -1, {}))
+    assert.same({}, vim.api.nvim_buf_get_extmarks(0, lackey.ghost_ns, 0, -1, {}))
   end)
 
   it("an edit in a window that is not the current one takes that line's ghost away", function()
@@ -130,7 +130,7 @@ describe("sorcerer.apprentice", function()
     vim.api.nvim_win_set_cursor(0, { 3, 0 })
     vim.api.nvim_buf_set_lines(buf, 0, 1, false, { "def g(x):" })
     vim.api.nvim_exec_autocmds("TextChanged", { buffer = buf })
-    assert.same({}, vim.api.nvim_buf_get_extmarks(buf, apprentice.ghost_ns, 0, -1, {}))
+    assert.same({}, vim.api.nvim_buf_get_extmarks(buf, lackey.ghost_ns, 0, -1, {}))
   end)
 
   it("opens a note beside the code and keeps the cursor", function()
@@ -147,7 +147,7 @@ describe("sorcerer.apprentice", function()
   it("shows the text before against the live buffer in diff mode", function()
     local root, c = started()
     local uri = vim.uri_from_fname(root .. "/src/a.py")
-    c.handlers["sorcerer/showDiff"](nil, { uri = uri, before = "def f(y):\n    pass\n", title = "apprentice: before" }, { client_id = c.id })
+    c.handlers["sorcerer/showDiff"](nil, { uri = uri, before = "def f(y):\n    pass\n", title = "lackey: before" }, { client_id = c.id })
     local wins = vim.api.nvim_tabpage_list_wins(0)
     assert.equals(2, #wins)
     for _, win in ipairs(wins) do assert.is_true(vim.wo[win].diff) end
@@ -162,7 +162,7 @@ describe("sorcerer.apprentice", function()
     vim.cmd.edit(root .. "/src/b.py")
     vim.api.nvim_buf_set_lines(0, 0, -1, false, { "x = 2" })
     local uri = vim.uri_from_fname(root .. "/src/a.py")
-    c.handlers["sorcerer/showDiff"](nil, { uri = uri, before = "", title = "apprentice: before" }, { client_id = c.id })
+    c.handlers["sorcerer/showDiff"](nil, { uri = uri, before = "", title = "lackey: before" }, { client_id = c.id })
     vim.o.hidden = true
     assert.equals(vim.fn.bufnr(root .. "/src/a.py"), vim.api.nvim_get_current_buf())
     assert.is_true(vim.wo.diff)
@@ -182,8 +182,8 @@ describe("sorcerer.apprentice", function()
     vim.fn.maparg("<leader>ma", "n", false, true).callback()
     vim.lsp.buf.code_action = real
     assert.is_true(applied.apply)
-    assert.is_true(applied.filter({ title = "apprentice: do this · ~$0.50 · sonnet" }))
-    assert.is_false(applied.filter({ title = "apprentice: Dismiss" }))
+    assert.is_true(applied.filter({ title = "lackey: do this · ~$0.50 · sonnet" }))
+    assert.is_false(applied.filter({ title = "lackey: Dismiss" }))
   end)
 
   it("the label key lists the four labels to pick from", function()
@@ -193,8 +193,8 @@ describe("sorcerer.apprentice", function()
     vim.fn.maparg("<leader>ml", "n", false, true).callback()
     vim.lsp.buf.code_action = real
     assert.is_false(applied.apply)
-    assert.is_true(applied.filter({ title = "apprentice: this was a claim" }))
-    assert.is_false(applied.filter({ title = "apprentice: do this · ~$0.50 · sonnet" }))
+    assert.is_true(applied.filter({ title = "lackey: this was a claim" }))
+    assert.is_false(applied.filter({ title = "lackey: do this · ~$0.50 · sonnet" }))
   end)
 
   it("status follows the task's progress", function()
@@ -203,7 +203,7 @@ describe("sorcerer.apprentice", function()
     vim.api.nvim_exec_autocmds("LspProgress", {
       data = { client_id = c.id, params = { token = "t", value = { kind = "begin", message = "refuse late cancellations · reading a.py · $0.00" } } },
     })
-    assert.equals("apprentice: refuse late cancellations · reading a.py · $0.00", sorcerer.status())
+    assert.equals("lackey: refuse late cancellations · reading a.py · $0.00", sorcerer.status())
     vim.api.nvim_exec_autocmds("LspProgress", { data = { client_id = c.id, params = { token = "t", value = { kind = "end" } } } })
     assert.equals("", sorcerer.status())
   end)

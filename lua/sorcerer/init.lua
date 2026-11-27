@@ -2,7 +2,7 @@
 -- review what changed and put each verified finding on its line; nothing to say, nothing shown.
 -- conjure (the writer) is opt-in beside it: a code action writes one change and marks it.
 -- spellbook (generators with holes, and rules) is opt-in too: `:Spellbook new`.
--- apprentice (an agent whose interface is the editor, a prototype) is opt-in as well.
+-- lackey (an agent whose interface is the editor, a prototype) is opt-in as well.
 local M = {}
 
 M.defaults = {
@@ -22,9 +22,9 @@ M.defaults = {
     sign = "✦",
   },
   -- off by default: a prototype, built from source
-  apprentice = {
+  lackey = {
     enabled = false,
-    cmd = { "apprentice", "lsp" },
+    cmd = { "lackey", "lsp" },
   },
   -- off by default: a user without spellbook installed sees no start error
   spellbook = {
@@ -48,7 +48,7 @@ M.defaults = {
   -- `false`, to bind nothing (or that one). A lhs you already mapped is skipped.
   keys = {
     prefix = "<leader>m", new = "n", fix = "f", conjure = "c", undo = "u", try_harder = "t", why = "w", check = "k", sync = "s",
-    -- apprentice: do this, stop, show diff, undo the task, journal, dismiss, label, open the answer
+    -- lackey: do this, stop, show diff, undo the task, journal, dismiss, label, open the answer
     ["do"] = "a", stop = "q", diff = "d", undo_task = "z", journal = "j", dismiss = "x", label = "l", open_answer = "o",
   },
 }
@@ -63,12 +63,12 @@ function M.setup(opts)
   if opts and opts.conjure and opts.conjure.sign == false then M.opts.conjure.sign = false end
   require("sorcerer.signs").setup(M.opts.scry, M.opts)
   require("sorcerer.working").setup(M.opts.working)
-  -- the keys before the servers start: apprentice tells its server the open-answer key
+  -- the keys before the servers start: lackey tells its server the open-answer key
   require("sorcerer.keys").setup(M.opts)
   require("sorcerer.scry").setup(M.opts.scry)
   require("sorcerer.conjure").setup(M.opts.conjure)
   require("sorcerer.spellbook").setup(M.opts.spellbook)
-  require("sorcerer.apprentice").setup(M.opts.apprentice)
+  require("sorcerer.lackey").setup(M.opts.lackey)
   require("sorcerer.code_actions").setup(M.opts.fixes_first)
 end
 
@@ -80,7 +80,7 @@ function M.status()
     require("sorcerer.scry").status(),
     require("sorcerer.conjure").status(),
     require("sorcerer.spellbook").status(),
-    require("sorcerer.apprentice").status(),
+    require("sorcerer.lackey").status(),
   }
   for _, line in ipairs(statuses) do
     if line ~= "" then table.insert(lines, line) end
