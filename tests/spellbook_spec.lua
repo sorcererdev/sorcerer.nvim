@@ -309,6 +309,23 @@ describe("sorcerer.spellbook :Spellbook new", function()
     assert.equals("booking", logged(log, "spellbook.plan")[2][2].service)
   end)
 
+  it("a list input is asked as one line of text, its prompt giving the item syntax", function()
+    local listing = {
+      id = "listing", name = "Listing", summary = "A model and its fields",
+      inputs = {
+        { name = "fields", type = "list", prompt = "The fields, name:kind (price:int,notes:text?)", optional = false },
+      },
+    }
+    start({ ["spellbook.generators"] = { listing }, ["spellbook.plan"] = plan, ["spellbook.apply"] = applied })
+    local asked = pickers({ "name:text,price:int" })
+    vim.cmd("Spellbook new listing")
+    wait(function() return float() ~= nil end)
+    assert.equals(0, #asked.select)
+    assert.same({ "The fields, name:kind (price:int,notes:text?): " }, asked.input)
+    assert.equals(0, #logged(log, "spellbook.choices"))
+    assert.same({ "listing", { fields = "name:text,price:int" } }, logged(log, "spellbook.plan")[1])
+  end)
+
   it("<CR> in the plan applies and q cancels", function()
     canned_all()
     pickers({})
