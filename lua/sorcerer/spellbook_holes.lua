@@ -48,7 +48,7 @@ end
 
 -- The message for hole I of N: what it wants and which keys move on. KEYS is the session's
 -- `{ next, prev }`; CONJURE_LHS the conjure key, or nil when conjure is not here.
--- Example: `hole 1 of 3 · field: its first input · type to replace · <Tab> next · <leader>mc conjure`.
+-- Example: `hole 1 of 3 · field: its first input · type to replace · <Tab> next · <leader>mn conjure`.
 function M.message_text(i, n, stop, keys, conjure_lhs)
   local parts = {
     ("hole %d of %d"):format(i, n),

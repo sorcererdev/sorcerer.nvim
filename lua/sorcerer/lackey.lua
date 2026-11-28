@@ -10,7 +10,7 @@
 --   * `sorcerer/ghost` { uri, line (from 0), lines }: grey lines below `line` (`virt_lines`),
 --     gone at your next edit of that line, or when `lines` is empty;
 --   * `sorcerer/note` { uri }: a note opened in a vertical split beside the code: the agent's,
---     or a long answer when you ask for it (`<leader>mo`); an answer never opens one unasked;
+--     or a long answer when you ask for it (`<leader>mlo`); an answer never opens one unasked;
 --   * `sorcerer/showDiff` { uri, before, title }: the file before the task against now, a
 --     scratch buffer and the live one side by side in diff mode, in a tab of their own.
 -- Everything else (marks, code actions, the picker, edits) is Neovim's own.
@@ -33,8 +33,8 @@ end
 function M.client_config()
   local config = require("sorcerer.working").client_config()
   config.init_options.handles = vim.deepcopy(M.handled)
-  -- the key that opens a long answer, so its mark can say it (`<leader>mo opens the whole answer`)
-  config.init_options.keys = { openAnswer = require("sorcerer.keys").lhs("open_answer") }
+  -- the key that opens a long answer, so its mark can say it (`<leader>mlo opens the whole answer`)
+  config.init_options.keys = { openAnswer = require("sorcerer.keys").lhs("lackey_open_answer") }
   config.handlers["sorcerer/ghost"] = function(_, result) M.ghost(result) end
   config.handlers["sorcerer/note"] = function(_, result) M.note(result) end
   config.handlers["sorcerer/showDiff"] = function(_, result) M.show_diff(result) end

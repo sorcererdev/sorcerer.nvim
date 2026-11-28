@@ -118,4 +118,37 @@ describe("sorcerer.scry", function()
     wait(function() return sorcerer.status() == "" end)
     assert.same({ "scry: reviewing 2 units", "scry: reviewing 3 units", "" }, seen)
   end)
+
+  it("the list key puts scry's findings in the quickfix list", function()
+    local root = project(".git")
+    vim.fn.writefile({ vim.json.encode({ { line = 1, code = "bug", statement = "f adds two, not one.", id = "f1" } }) }, replies .. "/diagnostics.json")
+    vim.cmd.edit(root .. "/src/a.py")
+    wait(function() return #clients() == 1 and clients()[1].initialized end)
+    vim.cmd.write()
+    wait(function() return #vim.diagnostic.get(0) == 1 end)
+    vim.fn.maparg("<leader>msl", "n", false, true).callback()
+    local list = vim.fn.getqflist({ title = 1, items = 1 })
+    vim.cmd("cclose")
+    assert.equals("scry findings", list.title)
+    assert.equals(1, #list.items)
+    assert.equals(2, list.items[1].lnum)
+  end)
+
+  it("the review key sends a saved file to scry.review", function()
+    local root = project(".git")
+    vim.cmd.edit(root .. "/src/a.py")
+    wait(function() return #clients() == 1 and clients()[1].initialized end)
+    wait(function() return vim.tbl_contains(vim.lsp.get_clients({ bufnr = 0 }), clients()[1]) end)
+    vim.fn.maparg("<leader>msr", "n", false, true).callback()
+    local sent
+    wait(function()
+      for _, line in ipairs(vim.split(read(vim.env.FAKE_LSP_LOG), "\n", { trimempty = true })) do
+        local msg = vim.json.decode(line)
+        if msg.method == "workspace/executeCommand" then sent = msg.params end
+      end
+      return sent ~= nil
+    end)
+    assert.equals("scry.review", sent.command)
+    assert.same({ vim.uri_from_fname(root .. "/src/a.py") }, sent.arguments)
+  end)
 end)

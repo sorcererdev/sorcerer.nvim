@@ -104,27 +104,68 @@ with the line as you edit, and goes when the work ends or the server exits. Its 
 
 ## Keys
 
-sorcerer binds its keys under one prefix, `<leader>m`, for the tools you turned on (lackey's
-are in [its own table](#lackey)):
+sorcerer binds its keys under one prefix, `<leader>m`, for the tools you turned on. The keys
+you use most sit right under it; the rest are grouped by product, one letter each: `s` scry,
+`c` conjure, `b` spellbook, `l` lackey. With which-key installed, each group shows under its
+product's name.
 
-| key | does | needs |
+| key | does | tool |
 |---|---|---|
-| `<leader>mn` | `:Spellbook new`, a generator's files | spellbook |
-| `<leader>mf` | the finding's fix on the cursor's line (the first `spellbook:` quick fix) | spellbook |
-| `<leader>mc` | conjure here (normal and visual) | conjure |
-| `<leader>mu` | undo the conjured change | conjure |
-| `<leader>mt` | try the change again, harder | conjure |
-| `<leader>mw` | show why the change was made | conjure |
-| `<leader>mk` | `:Spellbook check`, the rules over the project into the quickfix list | spellbook |
-| `<leader>ms` | `:Spellbook sync`, the owned regions refreshed | spellbook |
+| `<leader>ma` | do this: lackey's offer on the line (whatever its price); with no offer there, it says so | lackey |
+| `<leader>mf` | fix this: the line's spellbook fix, else the line's preferred quick fix (any server's) | any |
+| `<leader>mg` | generate…: `:Spellbook new`, a generator's files | spellbook |
+| `<leader>mn` | next step: conjure writes one change here (normal and visual) | conjure |
+| `<leader>mu` | undo the last change, whichever tool made it, and say which | conjure, lackey, spellbook |
+| `<leader>mw` | why is this flagged? scry's explanation of the finding on the line | scry |
+| `<leader>mq` | stop the running task | lackey |
+| **scry** | | |
+| `<leader>msw` | why is this flagged? (**scry: Show why**) | scry |
+| `<leader>msr` | review this file now (a file with unsaved changes is saved, which reviews it) | scry |
+| `<leader>msx` | dismiss the finding: pick here or everywhere | scry |
+| `<leader>msl` | list findings: scry's findings in the open files, in the quickfix list | scry |
+| `<leader>msc` | show the code the finding cites (**scry: Show code**) | scry |
+| **conjure** | | |
+| `<leader>mcn` | next step (**Conjure here**, normal and visual) | conjure |
+| `<leader>mct` | try the change again with more effort (**conjure: Try harder**) | conjure |
+| `<leader>mcu` | undo the change on this line (**conjure: Undo**) | conjure |
+| `<leader>mcw` | why this step (**conjure: Show why**) | conjure |
+| **spellbook** | | |
+| `<leader>mbg` | generate… (`:Spellbook new`) | spellbook |
+| `<leader>mbf` | fix: the first spellbook fix on the line | spellbook |
+| `<leader>mbk` | check this file: `:Spellbook check <file>` into the quickfix list | spellbook |
+| `<leader>mbs` | sync regions (`:Spellbook sync`) | spellbook |
+| `<leader>mbh` | list holes: `:Spellbook holes`, the open holes into the quickfix list | spellbook |
+| **lackey** | | |
+| `<leader>mla` | do this | lackey |
+| `<leader>mlq` | stop the task | lackey |
+| `<leader>mld` | show the diff of the task in this file | lackey |
+| `<leader>mlz` | undo the task | lackey |
+| `<leader>mlj` | the task's journal | lackey |
+| `<leader>mlo` | open the answer: a long answer, beside your code (none opens unasked) | lackey |
+| `<leader>mlx` | dismiss lackey's answer or verdict on the line | lackey |
+| `<leader>mll` | label what you wrote: a question, a claim, an instruction, or nothing | lackey |
 
-`conjure` and `undo` are the code actions **Conjure here** and **conjure: Undo** on the cursor's
-line, so a line offers what it always did. Change a key, or one `false` to skip it:
-`keys = { prefix = "<leader>m", undo = false, check = "x" }`; `keys = false` binds none. A key you
-have already mapped is never overwritten: it is skipped and `:checkhealth sorcerer` lists it.
+A key that names an action runs that code action on the cursor's line, so a line offers what it
+always did. **Undo the last change** remembers what conjure, lackey and spellbook changed (each
+lands its change through `workspace/applyEdit`) and takes back the latest: conjure's through
+**conjure: Undo** on its mark, lackey's task through **lackey: Undo this task** on the task's
+mark, spellbook's with Neovim's own undo in each file it changed (while it is still that file's
+last edit). It says whose change it undid: `undo: conjure's last change (a.py:12)`.
 
-`:Spellbook check` runs `spellbook check --json` in the project root and fills the quickfix list
-(opened when there are findings, else it says `spellbook: conventions hold`).
+Change a key, or set one to `false` to skip it, by its name: `keys = { prefix = "<leader>m",
+undo = false, spellbook_check = "bc" }`; `keys = false` binds none. The names are `do`, `fix`,
+`generate`, `next_step`, `undo`, `why`, `stop`, `scry_why`, `scry_review`, `scry_dismiss`,
+`scry_list`, `scry_code`, `conjure_next`, `conjure_try_again`, `conjure_undo`, `conjure_why`,
+`spellbook_generate`, `spellbook_fix`, `spellbook_check`, `spellbook_sync`, `spellbook_holes`,
+`lackey_do`, `lackey_stop`, `lackey_diff`, `lackey_undo`, `lackey_journal`, `lackey_open_answer`,
+`lackey_dismiss` and `lackey_label`. A key you have already mapped is never overwritten: it is
+skipped and `:checkhealth sorcerer` lists it, as it lists a name that is not one of these (the
+names changed when the keys were grouped by product; the sorcerer CHANGELOG has the old → new
+table).
+
+`:Spellbook check [file…]` runs `spellbook check --json` in the project root (on the named
+files, or the whole project) and fills the quickfix list (opened when there are findings, else
+it says `spellbook: conventions hold`).
 
 ## Three looks
 
@@ -144,8 +185,9 @@ tree-sitter parser you have for it (a file whose language has no parser stays pl
 ## Actions
 
 Show why, Show code and Dismiss come through your own code-action key
-(`vim.lsp.buf.code_action()`, usually `gra`) on a finding's line; scry's own actions have no
-`<leader>m` key. The `<leader>m` keys above are the plugin's only maps.
+(`vim.lsp.buf.code_action()`, usually `gra`) on a finding's line, and through the scry keys
+above (`<leader>mw`, `<leader>msc`, `<leader>msx`). The `<leader>m` keys are the plugin's only
+maps.
 
 ## Conjure
 
@@ -159,7 +201,7 @@ require("sorcerer").setup({ conjure = { enabled = true } })
 ```
 
 It needs a project (a folder with `.sorcerer/`, else a git repository) that you have trusted
-(`conjure trust` in it), and either `claude` on your PATH or an `ANTHROPIC_API_KEY` in your environment. The keys below (`<leader>mc`) run it; no code-action key is needed.
+(`conjure trust` in it), and either `claude` on your PATH or an `ANTHROPIC_API_KEY` in your environment. The next-step key (`<leader>mn`) runs it; no code-action key is needed.
 
 Put the cursor in a function (or select lines) and run the code action **Conjure here**; on a
 line with a scry finding, **Conjure for this finding**. A progress line says `conjuring a
@@ -192,7 +234,7 @@ require("sorcerer").setup({ spellbook = { enabled = true } })
 (`<CR>` applies, `q` cancels), writes the files, opens the first one on its first hole and marks
 every hole (an Information diagnostic, source `spellbook`; `]d` walks them). The marks follow the
 file on disk: save a file with a placeholder replaced and its mark goes. When conjure is on, a
-hole's line already offers **Conjure here**, and the end line says `<leader>mc to conjure the
+hole's line already offers **Conjure here**, and the end line says `<leader>mn to conjure the
 first`; with `conjure_holes = true` the plugin runs conjure on the first hole for you.
 
 **Fixes.** A rule can name the generator that repairs its finding. On a finding's line,
@@ -219,14 +261,14 @@ buffer when the file is open (left modified, `u` takes it back), on disk when it
 message line says `spellbook: synced region modules in src/booking/commands/mod.rs (+1 −0)`.
 With `[spellbook] sync_on_save = false` in `.sorcerer/config.toml` a stale block is a
 `region-stale` error on its opening marker instead, whose quick fix (`<leader>mf`) is
-`spellbook: Sync region modules`. `:Spellbook sync` (`<leader>ms`) refreshes every region: the
+`spellbook: Sync region modules`. `:Spellbook sync` (`<leader>mbs`) refreshes every region: the
 float shows each file as `~ path (region modules: +1 −0)` with its hunks, `<CR>` lands it as a
 fix does, and nothing to do says `spellbook: regions up to date`.
 
 **Holes work like snippet placeholders.** After the apply you land on the first hole's
 placeholder, selected (select mode): type and it is replaced. `<Tab>` moves to the next hole,
 `<S-Tab>` back; the message line says where you are, `hole 1 of 3 · field: its first input · type
-to replace · <Tab> next · <leader>mc conjure` (the conjure part when conjure is on). A hole grows
+to replace · <Tab> next · <leader>mn conjure` (the conjure part when conjure is on). A hole grows
 with what you type, so `<S-Tab>` selects your whole answer again. `<Tab>` on the last hole ends
 it (`spellbook: holes done`), and so does closing the buffer. The session walks the holes of the
 file it opened; a hole in another file (the test, say) stays marked, and the end line names it:
@@ -276,35 +318,26 @@ require("sorcerer").setup({
 **Your first offer.** In a Python file of a git repository (or any code language sorcerer ships,
 in its own comment), on a line of its own at the end (not inside a function), write `# Add a
 median(prices) function that returns the middle price.` and stop typing. About two seconds later a faint `lackey: I can do this · ~$0.50 ·
-sonnet` hint appears; `<leader>ma` runs it. A comment inside a function that describes a change
+sonnet` hint appears; `<leader>ma` (do this) runs it. A comment inside a function that describes a change
 may be read as an aside and get no offer: `<leader>ma` then says `lackey: no offer on this
 line`; put the request above the function, start it with what to do, or label the line
-(`<leader>ml`).
+(`<leader>mll`).
 
 Write in your code: a comment, a sentence in a docstring, an empty body. On idle lackey asks
 Jev what it is; on save it answers a question or checks a claim, in the margin (source
 `lackey`), and an instruction is offered as the code action `lackey: do this · ~$0.50 ·
 sonnet`. Accepting runs a task: its changes land in your buffers (unsaved, `u` undoes them), the
 status line says what it does, a question it asks is choices on a line or a list, and at the end
-a `✦ lackey: …` mark on each changed file offers **Show diff** (the file before the task
+a `✦ lackey changed this line in task "…"` mark on each changed file offers **Show diff** (the file before the task
 against now, side by side in diff mode in a tab of its own; `:tabclose` ends it), **Undo this task** and **Show journal**. Saving every
 file it changed keeps the task.
 
 The plugin starts `lackey lsp` with `debounce_text_changes = 0` and on every buffer under the
 root, as for conjure, and draws what the server sends only to it: grey suggested lines under a
 line (`SorcererGhost`, linked to `Comment`; gone at your next edit of the line), the agent's
-notes in a vertical split beside your code, and the diff view. Its keys:
-
-| key | does |
-|---|---|
-| `<leader>ma` | **lackey: do this** on the line (whatever its price); with no offer there, it says so |
-| `<leader>mo` | **lackey: Open the answer**: a long answer, beside your code (none opens unasked) |
-| `<leader>mq` | **lackey: Stop this task** (q for quit; `s` is spellbook sync) |
-| `<leader>md` | **lackey: Show diff** |
-| `<leader>mz` | **lackey: Undo this task** |
-| `<leader>mj` | **lackey: Show journal** |
-| `<leader>mx` | **lackey: Dismiss** a mark |
-| `<leader>ml` | label the line: what it really was (a question, a claim, an instruction, nothing) |
+notes in a vertical split beside your code, and the diff view. Its keys are the
+`<leader>ml` group in [Keys](#keys); do this (`<leader>ma`) and stop the running task
+(`<leader>mq`) sit right under the prefix too.
 
 `require("sorcerer").status()` says `lackey: <task> · <what it does> · $0.12` while a task
 runs.

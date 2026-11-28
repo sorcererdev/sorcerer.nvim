@@ -370,7 +370,7 @@ describe("sorcerer.spellbook :Spellbook new", function()
     return conjure_log
   end
 
-  it("the end line names <leader>mc when conjure is attached", function()
+  it("the end line names <leader>mn when conjure is attached", function()
     canned_all()
     local conjure_log = with_conjure(false)
     require("sorcerer.keys").setup({ keys = sorcerer.opts.keys, conjure = { enabled = true } })
@@ -380,7 +380,7 @@ describe("sorcerer.spellbook :Spellbook new", function()
     wait(function() local w, b = float(); buf = b; return w ~= nil end)
     press(buf, "<CR>")
     wait(function() return #messages > 0 end)
-    assert.equals("spellbook: wrote 2 files · 1 holes · <leader>mc to conjure the first", messages[#messages])
+    assert.equals("spellbook: wrote 2 files · 1 holes · <leader>mn to conjure the first", messages[#messages])
     vim.wait(100)
     assert.equals(0, #logged(conjure_log, "conjure.conjure"))
   end)
@@ -576,8 +576,8 @@ describe("sorcerer.spellbook hole session", function()
   end)
 
   it("names the conjure key when conjure is attached", function()
-    assert.equals("hole 1 of 2 · field: x · type to replace · <Tab> next · <leader>mc conjure",
-      holes.message_text(1, 2, { name = "field", instruction = "x" }, { next = "<Tab>" }, "<leader>mc"))
+    assert.equals("hole 1 of 2 · field: x · type to replace · <Tab> next · <leader>mn conjure",
+      holes.message_text(1, 2, { name = "field", instruction = "x" }, { next = "<Tab>" }, "<leader>mn"))
   end)
 
   it("hole_keys = false starts no session and keeps the end line", function()
@@ -874,6 +874,24 @@ describe("sorcerer.spellbook :Spellbook fix", function()
     assert.same({ "def f(x):", "    pass", "" }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
   end)
 
+  it("<leader>mu undoes spellbook's last change in the buffer and says so", function()
+    start()
+    pickers({ 1 })
+    local buf = vim.api.nvim_get_current_buf()
+    vim.fn.maparg("<leader>mf", "n", false, true).callback()
+    press(plan_float(), "<CR>")
+    wait(function() return #messages > 0 end)
+    assert.same({ "def f(x):", "    ported", "" }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+    assert.equals("spellbook", require("sorcerer.last_change").last().tool)
+    local said
+    local real = vim.notify
+    vim.notify = function(msg) said = msg end
+    vim.fn.maparg("<leader>mu", "n", false, true).callback()
+    vim.notify = real
+    assert.same({ "def f(x):", "    pass", "" }, vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+    assert.equals("undo: spellbook's last change (a.py:2)", said)
+  end)
+
   it("a fix that leaves a hole says its end line and starts the session on that hole", function()
     start({
       ["spellbook.apply"] = {
@@ -1021,10 +1039,10 @@ describe("sorcerer.spellbook :Spellbook sync", function()
     return buf
   end
 
-  it("<leader>ms plans the sync, asking nothing, and shows the region's row and hunks", function()
+  it("<leader>mbs plans the sync, asking nothing, and shows the region's row and hunks", function()
     start()
     local asked = pickers({})
-    vim.fn.maparg("<leader>ms", "n", false, true).callback()
+    vim.fn.maparg("<leader>mbs", "n", false, true).callback()
     local buf = plan_float()
     assert.same({ { "sync", {} } }, vim.tbl_map(function(args) return { args[1], args[2] } end, logged(log, "spellbook.plan")))
     assert.equals(0, #logged(log, "spellbook.generators"))
