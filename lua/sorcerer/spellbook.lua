@@ -126,7 +126,8 @@ local function ask_value(input, choices, done)
     end)
   else
     local prompt = input.prompt .. (input.optional and " (empty to skip)" or "") .. ": "
-    vim.ui.input({ prompt = prompt }, function(text)
+    -- an input with a default shows it in the box, so an empty answer is seen to keep it
+    vim.ui.input({ prompt = prompt, default = input.default }, function(text)
       if text ~= nil then text = vim.trim(text) end
       done(text)
     end)
