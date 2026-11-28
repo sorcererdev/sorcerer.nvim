@@ -152,7 +152,7 @@ local applied = {
 -- the scripted pickers: ANSWERS is consumed in order; a number picks that item of a select, a
 -- string is the text of an input, false cancels. Returns the log of what was asked.
 local function pickers(answers)
-  local asked = { select = {}, input = {} }
+  local asked = { select = {}, input = {}, input_defaults = {} }
   local function next_answer() return table.remove(answers, 1) end
   vim.ui.select = function(items, o, cb)
     table.insert(asked.select, { items = items, prompt = o.prompt, o = o })
@@ -161,6 +161,7 @@ local function pickers(answers)
   end
   vim.ui.input = function(o, cb)
     table.insert(asked.input, o.prompt)
+    table.insert(asked.input_defaults, o.default or false)
     local a = next_answer()
     cb(a or nil)
   end
@@ -324,6 +325,22 @@ describe("sorcerer.spellbook :Spellbook new", function()
     assert.same({ "The fields, name:kind (price:int,notes:text?): " }, asked.input)
     assert.equals(0, #logged(log, "spellbook.choices"))
     assert.same({ "listing", { fields = "name:text,price:int" } }, logged(log, "spellbook.plan")[1])
+  end)
+
+  it("an input with a default is asked with that default filled in", function()
+    local paged = {
+      id = "paged", name = "Paged", summary = "A list",
+      inputs = {
+        { name = "page_size", type = "text", prompt = "How many rows a page shows", optional = false, default = "50" },
+        { name = "title", type = "text", prompt = "The title", optional = false },
+      },
+    }
+    start({ ["spellbook.generators"] = { paged }, ["spellbook.plan"] = plan, ["spellbook.apply"] = applied })
+    local asked = pickers({ "", "Things" })
+    vim.cmd("Spellbook new paged")
+    wait(function() return float() ~= nil end)
+    assert.same({ "50", false }, asked.input_defaults)
+    assert.same({ "paged", { title = "Things" } }, logged(log, "spellbook.plan")[1])
   end)
 
   it("<CR> in the plan applies and q cancels", function()
