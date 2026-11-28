@@ -25,7 +25,7 @@ local function stop_all()
 end
 
 local function unmap_all()
-  for _, key in ipairs({ "a", "q", "d", "z", "j", "x", "l" }) do pcall(vim.keymap.del, "n", "<leader>m" .. key) end
+  for _, key in ipairs({ "a", "q", "u", "f", "la", "lq", "ld", "lz", "lj", "lo", "lx", "ll" }) do pcall(vim.keymap.del, "n", "<leader>m" .. key) end
 end
 
 local function started()
@@ -67,7 +67,7 @@ describe("sorcerer.lackey", function()
     assert.equals(true, c.config.init_options.drawsWorking)
     assert.same({ "sorcerer/ghost", "sorcerer/note", "sorcerer/showDiff" }, c.config.init_options.handles)
     -- the open-answer key, so a long answer's mark names it
-    assert.same({ openAnswer = "<leader>mo" }, c.config.init_options.keys)
+    assert.same({ openAnswer = "<leader>mlo" }, c.config.init_options.keys)
   end)
 
   it("attaches to every buffer under the root", function()
@@ -168,11 +168,13 @@ describe("sorcerer.lackey", function()
     assert.is_true(vim.wo.diff)
   end)
 
-  it("binds its keys under <leader>m when it is on", function()
-    for _, key in ipairs({ "a", "q", "d", "z", "j", "x", "l" }) do assert.truthy(vim.fn.maparg("<leader>m" .. key, "n") ~= "", key) end
+  it("binds its keys under <leader>ml, and do this and stop under <leader>m, when it is on", function()
+    for _, key in ipairs({ "a", "q", "u", "la", "lq", "ld", "lz", "lj", "lo", "lx", "ll" }) do assert.truthy(vim.fn.maparg("<leader>m" .. key, "n") ~= "", key) end
     assert.equals("<leader>ma", keys.lhs("do"))
-    assert.equals("<leader>ml", keys.lhs("label"))
+    assert.equals("<leader>mla", keys.lhs("lackey_do"))
+    assert.equals("<leader>mll", keys.lhs("lackey_label"))
     assert.equals("<leader>mq", keys.lhs("stop"))
+    assert.equals("label what you wrote", vim.fn.maparg("<leader>mll", "n", false, true).desc)
   end)
 
   it("the do key runs the offer whatever its price, and only it", function()
@@ -233,7 +235,7 @@ describe("sorcerer.lackey", function()
     local applied
     local real = vim.lsp.buf.code_action
     vim.lsp.buf.code_action = function(o) applied = o end
-    vim.fn.maparg("<leader>ml", "n", false, true).callback()
+    vim.fn.maparg("<leader>mll", "n", false, true).callback()
     vim.lsp.buf.code_action = real
     assert.is_false(applied.apply)
     assert.is_true(applied.filter({ title = "lackey: this was a claim" }))

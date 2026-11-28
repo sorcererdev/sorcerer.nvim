@@ -33,6 +33,34 @@ function M.status()
   return message and ("scry: " .. message) or ""
 end
 
+-- Review the current file now. A buffer with unsaved changes is saved, which is what makes scry
+-- review it; a saved one is sent to scry's `scry.review` command. scry reviews what changed in
+-- the file since its last review, as on a save.
+function M.review_here()
+  local buf = vim.api.nvim_get_current_buf()
+  local client = vim.lsp.get_clients({ bufnr = buf, name = "scry" })[1]
+  if not client then return vim.notify("scry is not running on this file", vim.log.levels.WARN) end
+  if vim.bo[buf].modified then return vim.cmd("update") end
+  local command = { command = "scry.review", arguments = { vim.uri_from_bufnr(buf) } }
+  local function said(err)
+    if err then vim.notify("scry: " .. tostring(err.message or err), vim.log.levels.WARN) end
+  end
+  if vim.fn.has("nvim-0.11") == 1 then
+    client:request("workspace/executeCommand", command, said, buf)
+  else
+    client.request("workspace/executeCommand", command, said, buf)
+  end
+end
+
+-- The quickfix list of scry's findings in the open files (scry shows findings only in open
+-- files), opened when there are any; with none it says so.
+function M.list_findings()
+  local findings = vim.tbl_filter(function(d) return d.source == "scry" end, vim.diagnostic.get(nil))
+  if #findings == 0 then return vim.notify("scry: no findings in the open files", vim.log.levels.INFO) end
+  vim.fn.setqflist({}, " ", { title = "scry findings", items = vim.diagnostic.toqflist(findings) })
+  vim.cmd("copen")
+end
+
 local function follow_progress(ev)
   local client = vim.lsp.get_client_by_id(ev.data.client_id)
   if not client or client.name ~= "scry" then return end

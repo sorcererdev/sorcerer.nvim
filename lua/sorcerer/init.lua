@@ -44,13 +44,11 @@ M.defaults = {
   -- the code-action menu lists the preferred quick fixes first (a spellbook rule's fix), then the
   -- other quick fixes, then the rest, as VS Code does; false leaves Neovim's order
   fixes_first = true,
-  -- sorcerer's keys, `<prefix><key>`; each needs its tool on. Set `keys = false`, or one key to
-  -- `false`, to bind nothing (or that one). A lhs you already mapped is skipped.
-  keys = {
-    prefix = "<leader>m", new = "n", fix = "f", conjure = "c", undo = "u", try_harder = "t", why = "w", check = "k", sync = "s",
-    -- lackey: do this, stop, show diff, undo the task, journal, dismiss, label, open the answer
-    ["do"] = "a", stop = "q", diff = "d", undo_task = "z", journal = "j", dismiss = "x", label = "l", open_answer = "o",
-  },
+  -- sorcerer's keys, `<prefix><key>`, grouped by product (`<leader>ms` scry, `<leader>mc` conjure,
+  -- `<leader>mb` spellbook, `<leader>ml` lackey, the common ones right under the prefix; the
+  -- whole list is in keys.lua and the README). Each needs its tool on. Set `keys = false`, or one
+  -- name to `false`, to bind nothing (or that one). A lhs you already mapped is skipped.
+  keys = require("sorcerer.keys").defaults(),
 }
 
 function M.setup(opts)
@@ -65,6 +63,8 @@ function M.setup(opts)
   require("sorcerer.working").setup(M.opts.working)
   -- the keys before the servers start: lackey tells its server the open-answer key
   require("sorcerer.keys").setup(M.opts)
+  -- what conjure, lackey and spellbook change, so the undo key undoes the latest
+  require("sorcerer.last_change").setup()
   require("sorcerer.scry").setup(M.opts.scry)
   require("sorcerer.conjure").setup(M.opts.conjure)
   require("sorcerer.spellbook").setup(M.opts.spellbook)

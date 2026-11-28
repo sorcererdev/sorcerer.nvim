@@ -36,8 +36,8 @@ function M.runnable(name, cmd)
   checked[name] = vim.fn.executable(exe) == 1
   if not checked[name] then
     vim.notify(
-      ("sorcerer: `%s` is not on the path, so %s's language server is not started. "
-        .. "Set %s.cmd in setup() to its full path, install it (%s), or turn it off with `%s = { enabled = false }`"):format(exe, name, name, M.install[name], name),
+      ("%s: `%s` is not on the path, so %s's language server is not started. "
+        .. "Set %s.cmd in setup() to its full path, install it (%s), or turn it off with `%s = { enabled = false }`"):format(name, exe, name, name, M.install[name], name),
       vim.log.levels.WARN
     )
   end

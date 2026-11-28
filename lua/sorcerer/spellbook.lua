@@ -222,7 +222,7 @@ local function start_holes(reply, abs, conjure)
     local name = vim.api.nvim_buf_get_name(buf)
     if name ~= "" and vim.fs.normalize(name) == abs then
       vim.api.nvim_set_current_win(win)
-      local conjure_lhs = conjure and require("sorcerer.keys").lhs("conjure") or nil
+      local conjure_lhs = conjure and require("sorcerer.keys").conjure_lhs() or nil
       require("sorcerer.spellbook_holes").start(buf, mine, keys, conjure_lhs, others)
       return true
     end
@@ -258,7 +258,7 @@ local function finish(client, reply, fixed)
     local n = holes_to_fill(reply.holes)
     local text = end_text()
     if n > 0 then
-      local key = require("sorcerer.keys").lhs("conjure")
+      local key = require("sorcerer.keys").conjure_lhs()
       text = text .. (conjure and (" · %d holes · %s to conjure the first"):format(n, key or "Conjure here (a code action)")
         or (" · %d holes, marked; ]d walks them"):format(n))
     end
@@ -489,25 +489,66 @@ local function check_items(findings, root)
   return items
 end
 
--- `:Spellbook check`: run the rules over the project and list the findings in the quickfix
--- list (opened when there are any), else say the conventions hold.
-function M.check()
+-- Run `spellbook ARGS…` in the project root and hand DONE its decoded JSON, or say why not.
+-- WHAT names the run in what is said ("check").
+local function spellbook_json(args, what, done)
   local root = M.root(0) or vim.uv.cwd()
-  local cmd = { opts and opts.cmd and opts.cmd[1] or "spellbook", "check", "--json" }
-  vim.system(cmd, { cwd = root, text = true }, vim.schedule_wrap(function(done)
-    if done.code ~= 0 and done.code ~= 1 then
-      local why = vim.trim((done.stderr or "") ~= "" and done.stderr or (done.stdout or ""))
-      return say(("spellbook: check could not run: %s"):format(why), vim.log.levels.ERROR)
+  local cmd = vim.list_extend({ opts and opts.cmd and opts.cmd[1] or "spellbook" }, args)
+  vim.system(cmd, { cwd = root, text = true }, vim.schedule_wrap(function(ran)
+    if ran.code ~= 0 and ran.code ~= 1 then
+      local why = vim.trim((ran.stderr or "") ~= "" and ran.stderr or (ran.stdout or ""))
+      return say(("spellbook: %s could not run: %s"):format(what, why), vim.log.levels.ERROR)
     end
-    local ok, report = pcall(vim.json.decode, done.stdout or "")
+    local ok, report = pcall(vim.json.decode, ran.stdout or "")
     if not ok or type(report) ~= "table" then
-      return say("spellbook: check printed something unreadable", vim.log.levels.ERROR)
+      return say(("spellbook: %s printed something unreadable"):format(what), vim.log.levels.ERROR)
     end
+    done(report, root)
+  end))
+end
+
+-- `:Spellbook check [file…]`: run the rules over the project, or only over FILES (paths from the
+-- project root), and list the findings in the quickfix list (opened when there are any), else
+-- say the conventions hold.
+function M.check(files)
+  local args = vim.list_extend({ "check", "--json" }, files or {})
+  spellbook_json(args, "check", function(report, root)
     local items = check_items(report.findings or {}, root)
     vim.fn.setqflist({}, " ", { title = "spellbook check", items = items })
-    if #items == 0 then return say("spellbook: conventions hold") end
+    if #items == 0 then
+      return say(files and #files > 0 and ("spellbook: conventions hold in %s"):format(table.concat(files, ", ")) or "spellbook: conventions hold")
+    end
     vim.cmd("copen")
-  end))
+  end)
+end
+
+-- Check this file (`<leader>mbk`): `:Spellbook check` on the current file alone, as saved.
+function M.check_file()
+  local name = vim.api.nvim_buf_get_name(0)
+  local root = M.root(0)
+  if name == "" or not root then return say("spellbook: open a file in the project first", vim.log.levels.WARN) end
+  local relative = vim.fs.normalize(name):sub(#vim.fs.normalize(root) + 2)
+  if vim.bo.modified then say("spellbook: checking the saved file; this buffer has unsaved changes") end
+  M.check({ relative })
+end
+
+-- `:Spellbook holes`: the holes still open in the project in the quickfix list (opened when there
+-- are any), each with what it wants; else say there are none.
+function M.holes()
+  spellbook_json({ "holes", "--json" }, "holes", function(open, root)
+    local items = {}
+    for _, hole in ipairs(open) do
+      table.insert(items, {
+        filename = vim.fs.joinpath(root, hole.file),
+        lnum = hole.line,
+        type = "I",
+        text = ("%s: %s"):format(hole.name, hole.instruction),
+      })
+    end
+    vim.fn.setqflist({}, " ", { title = "spellbook holes", items = items })
+    if #items == 0 then return say("spellbook: no open holes") end
+    vim.cmd("copen")
+  end)
 end
 
 -- OPTS is the `spellbook` table of setup.
@@ -516,7 +557,8 @@ function M.setup(o)
   vim.api.nvim_create_user_command("Spellbook", function(c)
     local sub = table.remove(c.fargs, 1)
     if sub == "new" then return M.new(c.fargs) end
-    if sub == "check" then return M.check() end
+    if sub == "check" then return M.check(c.fargs) end
+    if sub == "holes" then return M.holes() end
     if sub == "sync" then return M.sync() end
     if sub == "fix" then
       local given = {}
@@ -526,12 +568,12 @@ function M.setup(o)
       end
       return M.fix_here(given)
     end
-    say("spellbook: use `:Spellbook new [generator] [input=value…]`, `:Spellbook fix [input=value…]`, `:Spellbook sync` or `:Spellbook check`", vim.log.levels.WARN)
+    say("spellbook: use `:Spellbook new [generator] [input=value…]`, `:Spellbook fix [input=value…]`, `:Spellbook sync`, `:Spellbook check [file…]` or `:Spellbook holes`", vim.log.levels.WARN)
   end, {
     nargs = "*",
     complete = function(lead, line)
       if not line:match("^%s*Spellbook%s+%S*$") then return {} end
-      return vim.tbl_filter(function(s) return vim.startswith(s, lead) end, { "new", "fix", "sync", "check" })
+      return vim.tbl_filter(function(s) return vim.startswith(s, lead) end, { "new", "fix", "sync", "check", "holes" })
     end,
     desc = "spellbook: write a generator's files",
   })

@@ -10,7 +10,7 @@ local lackey_install = require("sorcerer.program").install.lackey
 local function check_lackey()
   local lackey = (require("sorcerer").opts or require("sorcerer").defaults).lackey or {}
   if not lackey.enabled then return end
-  vim.health.start("sorcerer: lackey")
+  vim.health.start("lackey")
   local exe = (lackey.cmd or { "lackey", "lsp" })[1]
   if vim.fn.executable(exe) == 0 then
     vim.health.error(("`%s` is not on the path"):format(exe), { "install it: " .. lackey_install, "or set lackey.cmd in setup()", "or turn it off: lackey = { enabled = false } in setup()" })
@@ -29,7 +29,7 @@ end
 local function check_conjure()
   local conjure = (require("sorcerer").opts or require("sorcerer").defaults).conjure or {}
   if not conjure.enabled then return end
-  vim.health.start("sorcerer: conjure")
+  vim.health.start("conjure")
   local exe = (conjure.cmd or { "conjure", "lsp" })[1]
   if vim.fn.executable(exe) == 0 then
     vim.health.error(("`%s` is not on the path"):format(exe), { "install it: " .. conjure_install, "or set conjure.cmd in setup()", "or turn it off: conjure = { enabled = false } in setup()" })
@@ -48,7 +48,7 @@ end
 local function check_spellbook()
   local spellbook = (require("sorcerer").opts or require("sorcerer").defaults).spellbook or {}
   if not spellbook.enabled then return end
-  vim.health.start("sorcerer: spellbook")
+  vim.health.start("spellbook")
   local exe = (spellbook.cmd or { "spellbook", "lsp" })[1]
   if vim.fn.executable(exe) == 0 then
     vim.health.error(("`%s` is not on the path"):format(exe), { "install it: " .. spellbook_install, "or set spellbook.cmd in setup()", "or turn it off: spellbook = { enabled = false } in setup()" })
@@ -67,11 +67,16 @@ end
 local function check_keys()
   local keys = require("sorcerer.keys")
   local bound, skipped = keys.bound(), keys.skipped()
-  if #bound == 0 and #skipped == 0 then return end
-  vim.health.start("sorcerer: keys")
+  local unknown = keys.unknown()
+  if #bound == 0 and #skipped == 0 and #unknown == 0 then return end
+  vim.health.start("keys")
   for _, one in ipairs(bound) do vim.health.ok(("%s is %s"):format(one.name, one.lhs)) end
   for _, one in ipairs(skipped) do
     vim.health.warn(("%s: %s is already mapped, left alone"):format(one.name, one.lhs), { "map another key in setup(): keys = { " .. one.name .. ' = "<key>" }' })
+  end
+  for _, name in ipairs(unknown) do
+    vim.health.warn(("keys.%s is not one of sorcerer's keys, so it binds nothing"):format(name),
+      { "the keys were renamed when they were grouped by product: see the keys table in the README" })
   end
 end
 
